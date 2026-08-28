@@ -1,0 +1,48 @@
+# Unreal generated
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Visual Studio
+.vs/
+*.sln
+*.VC.db
+*.VC.opendb
+
+
+# Rider / JetBrains
+.idea/
+.fleet/
+
+# VS Code
+.vscode/
+
+# Xcode
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build/package output
+StagedBuilds/
+Packaged/
+Build/*/FileOpenOrder/
+
+# Unreal per-user content
+Content/Developers/
+
+# Local automation reports
+AutomationReport/
+TestResults/
+
+# Rider / JetBrains
+*.opensdf
+*.sdf
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
