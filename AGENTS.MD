@@ -7,7 +7,7 @@ It does not define gameplay design itself.
 
 When implementing gameplay:
 
-1. Read Docs/IMPLEMENTATION_CONTRACT.md
+1. Read Docs/DESIGN_CONTRACT.md
 2. Read relevant architecture/code
 3. Inspect current implementation
 4. Only then implement
@@ -19,7 +19,7 @@ automatically implementation-authoritative.
 
 Use the following information hierarchy for gameplay implementation:
 
-1. `Docs/IMPLEMENTATION_CONTRACT.md`
+1. `Docs/DESIGN_CONTRACT.md`
    - implementation-approved gameplay rules
    - authoritative for what the current prototype is intended to do
 
@@ -37,7 +37,7 @@ Notion contains broader design exploration, hypotheses, rejected ideas,
 worldbuilding, playtest evidence, and future possibilities.
 
 Do not treat brainstorm or future ideas from Notion as implementation-approved
-unless they have been promoted into `IMPLEMENTATION_CONTRACT.md`.
+unless they have been promoted into `DESIGN_CONTRACT.md`.
 
 If design documentation and implementation disagree, report the discrepancy.
 Do not silently choose one and rewrite the other.
