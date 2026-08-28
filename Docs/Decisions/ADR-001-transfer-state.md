@@ -1,4 +1,4 @@
-# ADR-001: Transfer State Ownership
+# ADR-001: Motion State Ownership and Representation
 
 - Status: Proposed
 - Date: 2026-08-28
@@ -6,41 +6,53 @@
 
 ## Context
 
-Player, Enemy, and Environment actors must participate in one Transfer system while preserving the invariant that a carrier owns at most one Transfer State. The repository does not yet contain Transfer code, so ownership must be decided before implementation creates multiple mutation paths.
+The Design Contract now fixes the transferable resource as one gameplay-authored Motion State. P0 uses Linear motion with direction and magnitude; Player, Enemy, and Environment must share one ownership rule. The repository still has no Motion Transfer code, so the first implementation must avoid parallel Blueprint mutation paths.
 
 ## Proposed Decision
 
-Each participating actor owns exactly one `UTransferComponent`. That component owns zero or one runtime `CurrentState` and is the only authority allowed to mutate it.
+Represent the runtime value as `FMotionState`:
 
-Actors participate through `ITransferable`, which exposes their Transfer component. Authored state definitions live in `DA_TransferDefinition`; Data Assets are immutable definitions and never own runtime carrier state.
+- `Type` — Linear in P0;
+- `DirectionOrAxis`;
+- `Magnitude`;
+- optional Period/Phase fields reserved for future motion types;
+- SourceId/DebugTag for traceability.
 
-The component validates and commits transfers. Actor classes and Blueprint presentation react to component events but do not write the state directly.
+Each participating actor owns one `UMotionTransferComponent`. That component owns zero or one runtime `CurrentMotion` and is the only authority allowed to mutate it.
+
+Actors participate through `IMotionTransferable`, which exposes the component and compatibility queries. Capture and Transfer atomically move the value between components; they do not copy or recreate it.
+
+Data Assets may describe reusable presentation/tuning by Motion type, but they never own direction, magnitude, carrier ownership, target selection, or room progress for a runtime instance.
 
 ## Rationale
 
-- The same ownership rule applies to Player, Enemy, and Environment.
+- The same ownership rule applies to Source, Player, Enemy, Carrier, and Receiver.
 - A single writer makes the one-state invariant testable.
+- A value struct represents the actual direction/magnitude without creating one asset per runtime state.
 - Actor-specific behavior remains decoupled from core state mutation.
-- Definitions can be reused and tuned without storing runtime ownership in shared assets.
+- Future Angular/Oscillation fields can extend the value without introducing a second resource grammar.
 
 ## Consequences
 
-- Participating actors must provide a Transfer component and implement the interface.
-- Blueprint needs read/query and request APIs, but no writable `CurrentState` property.
-- Transfer-specific persistence or replication must serialize component state rather than Data Assets.
-- Component lifecycle and save/load behavior must be decided if those capabilities enter scope.
+- Participating actors must provide a Motion component and implement the interface.
+- Blueprint receives read/query and request APIs, but no writable `CurrentMotion` property.
+- Capture, Transfer, consumption, and Reset must all use the same component mutation boundary.
+- Save/load or replication, if later added, must serialize component state rather than Data Assets.
+- P0 magnitude can change from continuous to tiered without changing ownership or interface boundaries.
 
 ## Rejected Alternatives
 
 - **State stored directly on each actor class:** duplicates rules and encourages pair-specific implementations.
 - **Global subsystem owns all carrier state:** centralizes unrelated actor lifetime and adds lookup/cleanup complexity before it is needed.
 - **Mutable state stored in a Data Asset:** shared assets cannot safely represent per-instance runtime ownership.
+- **Motion represented only as live physics velocity:** cannot reliably preserve identity, preview compatibility, or deterministic Reset.
 
 ## Acceptance Gate
 
-Before changing this ADR to `Accepted`:
+Before changing this ADR to `Accepted`, EXP-001 must demonstrate:
 
-- confirm that every initial participant can host the component;
-- confirm whether zero-state and replacement behavior match the design contract;
-- define the minimal result/state types needed by the first promoted interaction;
-- agree that Blueprint cannot directly write runtime state.
+- one Source, Player, and Receiver using the same component/interface boundary;
+- at least 20 Capture/Transfer/Reset cycles without duplication or lost ownership;
+- a rejected transaction leaves the current owner unchanged;
+- room Reset restores the authoritative Source/Receiver/Player state;
+- Blueprint presentation reacts to events without directly writing runtime state.
