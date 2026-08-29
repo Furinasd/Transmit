@@ -15,6 +15,9 @@ Saved/
 .idea/
 .fleet/
 
+# External plugins installed by IDE / tools (not project-owned)
+Plugins/Developer/RiderLink/
+
 # VS Code
 .vscode/
 

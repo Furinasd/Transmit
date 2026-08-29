@@ -7,7 +7,7 @@ It does not define gameplay design itself.
 
 When implementing gameplay:
 
-1. Read Docs/IMPLEMENTATION_CONTRACT.md
+1. Read Docs/DESIGN_CONTRACT.md
 2. Read relevant architecture/code
 3. Inspect current implementation
 4. Only then implement
@@ -19,7 +19,7 @@ automatically implementation-authoritative.
 
 Use the following information hierarchy for gameplay implementation:
 
-1. `Docs/IMPLEMENTATION_CONTRACT.md`
+1. `Docs/DESIGN_CONTRACT.md`
    - implementation-approved gameplay rules
    - authoritative for what the current prototype is intended to do
 
@@ -37,7 +37,7 @@ Notion contains broader design exploration, hypotheses, rejected ideas,
 worldbuilding, playtest evidence, and future possibilities.
 
 Do not treat brainstorm or future ideas from Notion as implementation-approved
-unless they have been promoted into `IMPLEMENTATION_CONTRACT.md`.
+unless they have been promoted into `DESIGN_CONTRACT.md`.
 
 If design documentation and implementation disagree, report the discrepancy.
 Do not silently choose one and rewrite the other.
@@ -179,3 +179,25 @@ It is done when:
 
 When the requested task is complete, stop.
 Do not continue opportunistic refactoring.
+
+## Unreal Editor / MCP Binary Asset Safety
+
+Binary editor operations must use narrow, reviewable transactions.
+C++, text files, and repository documentation are the preferred automation
+targets.
+
+For existing or newly created UE assets:
+
+- Do not batch-create or modify Maps, Blueprints, Input assets, and World state
+  in one MCP task.
+- Project Settings, Editor Preferences, rendering CVars, World Settings,
+  lighting actors, and viewport settings are read-only by default unless
+  explicitly scoped.
+- A map task must not implicitly "fix" rendering or project configuration.
+
+After any binary write: Save -> Stop -> Human Inspect -> Continue.
+
+Never use broad cleanup or deletion to recover from an MCP failure.
+Quarantine suspect uncommitted binary assets instead.
+A binary-asset failure must not trigger rollback of unrelated `Source/`,
+`.uproject`, or `Config/` work without evidence.
