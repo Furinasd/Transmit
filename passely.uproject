@@ -3,6 +3,13 @@
 	"EngineAssociation": "{85A4C46F-4BDF-DE5B-D670-A688E28093E7}",
 	"Category": "",
 	"Description": "",
+	"Modules": [
+		{
+			"Name": "passely",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
 	"Plugins": [
 		{
 			"Name": "ModelingToolsEditorMode",

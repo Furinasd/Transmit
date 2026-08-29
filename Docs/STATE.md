@@ -2,8 +2,8 @@
 
 > Rebuildable and non-authoritative. Durable product rules belong in `DESIGN_CONTRACT.md`; durable technical decisions belong in `ARCHITECTURE.md`, ADRs, and Git history.
 
-Last inspected: 2026-08-28
-Plan status: **Awaiting review — do not begin implementation until this plan is approved.**
+Last inspected: 2026-08-29
+Plan status: **EXP-001 recovery review — implementation is paused.**
 
 ## Current Milestone
 
@@ -22,6 +22,25 @@ Deadline vertical slice — ship a readable, complete L1–L3 Windows build by t
 - UE third-person template assets and project configuration are present.
 - The latest local UE 5.8.1 Editor log records successful initialization and a map check with 0 errors and 0 warnings.
 - A `CompileAllBlueprints` commandlet run completed with 0 Blueprint errors, 0 Blueprint warnings, and 0 load failures, although the process exited 1 because the workstation's Installed DDC/Zen cache had no writable node.
+
+## Current Recovery State
+
+- The EXP-001 Unreal MCP incident review is complete. Existing ThirdPerson maps
+  render normally, localizing the viewport failure to the uncommitted
+  `Content/Transmit/` binary asset batch saved at 2026-08-29 14:52:34.
+- That suspect batch (10 assets) was moved, not deleted, to
+  `Saved/MCPQuarantine/2026-08-29_145234/` with the original `Content/Transmit/`
+  subdirectory structure preserved; `Saved/` is Git-ignored, so the batch stays
+  out of version control pending human review. No broad cleanup or deletion is
+  authorized.
+- The MCP operation did not modify project `Config/` files.
+- Existing `Source/` Motion C++ work and `passely.uproject` are unrelated to the
+  localized binary failure and must be preserved unless new evidence changes
+  that boundary.
+- `Plugins/Developer/RiderLink/` is an external IDE-installed plugin and is
+  ignored via `.gitignore`.
+- The dated execution plan below is paused and does not authorize resuming
+  EXP-001 implementation.
 
 ## Frozen Scope
 
@@ -79,7 +98,9 @@ Codex can implement and statically/build-validate the scoped C++ and Blueprint-s
 
 ## Immediate Next Step
 
-Review and approve or revise this plan. After approval, begin only the Aug 29 EXP-001-as-L1 work. Do not implement gameplay before that review.
+Review this control-plane update and the quarantined `Content/Transmit/` scope.
+Any later binary recovery must be separately authorized as a narrow,
+reviewable transaction. Do not resume EXP-001 implementation yet.
 
 ## Update Policy
 
