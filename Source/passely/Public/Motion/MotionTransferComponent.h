@@ -156,7 +156,6 @@ private:
 #if WITH_DEV_AUTOMATION_TESTS
     friend class FMotionGlobalNotificationFifoTest;
 
-    UFUNCTION()
     void HandleTestingStateChanged(const FMotionTransferResult& Result);
 
     TWeakObjectPtr<UMotionTransferComponent> TestingTransactionSource;

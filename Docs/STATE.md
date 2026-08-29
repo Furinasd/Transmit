@@ -2,8 +2,8 @@
 
 > Rebuildable and non-authoritative. Durable product rules belong in `DESIGN_CONTRACT.md`; durable technical decisions belong in `ARCHITECTURE.md`, ADRs, and Git history.
 
-Last inspected: 2026-08-29
-Plan status: **EXP-001 recovery review — implementation is paused.**
+Last inspected: 2026-08-30
+Plan status: **EXP-001 L1 基础闭环已在 PIE 可玩，进入可读性与验收阶段。**
 
 ## Current Milestone
 
@@ -25,22 +25,20 @@ Deadline vertical slice — ship a readable, complete L1–L3 Windows build by t
 
 ## Current Recovery State
 
-- The EXP-001 Unreal MCP incident review is complete. Existing ThirdPerson maps
-  render normally, localizing the viewport failure to the uncommitted
-  `Content/Transmit/` binary asset batch saved at 2026-08-29 14:52:34.
-- That suspect batch (10 assets) was moved, not deleted, to
-  `Saved/MCPQuarantine/2026-08-29_145234/` with the original `Content/Transmit/`
-  subdirectory structure preserved; `Saved/` is Git-ignored, so the batch stays
-  out of version control pending human review. No broad cleanup or deletion is
-  authorized.
-- The MCP operation did not modify project `Config/` files.
-- Existing `Source/` Motion C++ work and `passely.uproject` are unrelated to the
-  localized binary failure and must be preserved unless new evidence changes
-  that boundary.
-- `Plugins/Developer/RiderLink/` is an external IDE-installed plugin and is
-  ignored via `.gitignore`.
-- The dated execution plan below is paused and does not authorize resuming
-  EXP-001 implementation.
+- Black screen resolved: the suspect binary batch remains quarantined at
+  `Saved/MCPQuarantine/2026-08-29_145234/`; all `Content/Transmit/` assets were
+  rebuilt via the staged `build_exp001_assets.py` scripts (inputs / blueprints /
+  map), and the Editor module was rebuilt and restarted to include
+  `MotionDirectionIndicatorComponent`.
+- Asset set complete (11 assets): input actions/context, Character/Controller/
+  GameMode/Source/Receiver Blueprints, `L_TestChamber` (+ HLOD). Map contains
+  `PlayerStart_EXP001`, `Source_Linear_001`, `Receiver_Linear_001`,
+  `RoomReset_EXP001` (auto-discover on); WorldSettings uses `BP_TransmitGameMode`.
+- Static validation: 5 Blueprints compile OK; Map Check `0 Error(s), 0 Warning(s)`;
+  `EXP001_VALIDATE SUCCESS` (`Saved/Logs/Validate-EXP001-Assets2.log`).
+- PIE runtime: Capture/Transfer/Consume success; rejection paths
+  `SourceEmpty` / `CarrierOccupied` / `InvalidSource`; 20/20 automated Room
+  Reset cycles with `participants=3, success=true` (`Saved/Logs/passely.log`).
 
 ## Frozen Scope
 
@@ -88,19 +86,25 @@ Codex can implement and statically/build-validate the scoped C++ and Blueprint-s
 
 ## Current Blockers and Risks
 
-- No Motion State, Capture, Carry, Transfer, Receiver, or room Reset runtime path has yet been verified in PIE.
-- The highest-risk assumption is comprehension: players may read the loop as object grabbing or energy shooting rather than moving motion. Sep 1 is the decision gate, not a ceremonial test.
-- The C++ component/interface boundary and atomic ownership transaction are not yet proven in UE runtime.
+- L1 runtime path is verified in PIE, but this is not yet human gameplay acceptance; 20/20 resets were automated key injection, not a human session.
+- The highest-risk assumption remains comprehension: players may read the loop as object grabbing or energy shooting rather than moving motion. Sep 1 is the decision gate, not a ceremonial test.
+- MCP cannot set PlayerController `ControlRotation`, so programmatic camera aiming is unavailable; aim/readability must be exercised by a human playtest.
 - The Sep 1 comprehension gate leaves only three focused days before feature freeze; a failure requires reducing presentation and content ambition, not bypassing the gate.
 - L3 still depends on an approved environment outcome because direct Player → Charger Transfer remains open in the Design Contract.
 - Local DDC/Zen permissions or data-path configuration must be repaired or safely worked around before automated commandlets can return a clean process exit.
+- Commandlets exit 1 while the Editor holds MCP port 8000 (bind error); judge by `EXP001_GENERATE/EXP001_VALIDATE` log lines, not exit code.
+- Config cleanup pending: duplicate `r.DefaultFeature.AutoExposure.ExtendDefaultLuminanceRange` and `DefaultGraphicsRHI` in `DefaultEngine.ini`; duplicate MCP settings section in `DefaultEditorPerProjectUserSettings.ini`.
 - The `.uproject` uses a GUID engine association; another workstation may require reassociation. Cross-platform compatibility is not part of the deadline acceptance unless separately required.
 
 ## Immediate Next Step
 
-Review this control-plane update and the quarantined `Content/Transmit/` scope.
-Any later binary recovery must be separately authorized as a narrow,
-reviewable transaction. Do not resume EXP-001 implementation yet.
+1. Human PIE playtest of `L_TestChamber` (E/Q/R) and record first-player
+   comprehension; tune spawn facing, target readability, and presentation only
+   as needed.
+2. Formalize the 20/20 reset gate with the human session and keep the evidence
+   reproducible.
+3. After the Sep 1 comprehension gate passes, design/implement L2 redirect rail
+   (Sep 2). Any binary recovery must remain a narrow, reviewable transaction.
 
 ## Update Policy
 

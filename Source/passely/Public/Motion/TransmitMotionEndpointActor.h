@@ -20,6 +20,8 @@ class PASSELY_API ATransmitMotionEndpointActor : public AActor, public IMotionTr
 public:
     ATransmitMotionEndpointActor();
 
+    virtual void Tick(float DeltaSeconds) override;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")
     TObjectPtr<UMotionTransferComponent> Motion;
 
@@ -35,11 +37,27 @@ public:
 protected:
     virtual void BeginPlay() override;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Presentation|Motion Preview")
+    bool bAnimateOwnedMotion = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Presentation|Motion Preview", meta = (ClampMin = "1.0"))
+    float MotionPreviewDistance = 180.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Presentation|Motion Preview", meta = (ClampMin = "0.0"))
+    float MotionPreviewSpeedScale = 0.25f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Presentation|Receiver", meta = (ClampMin = "1.0"))
+    float ConsumedBodyScaleMultiplier = 1.2f;
+
 private:
     UPROPERTY(VisibleAnywhere, Category = "Presentation")
     TObjectPtr<USceneComponent> SceneRoot;
 
     bool bConsumedSinceReset = false;
+    bool bHadMotionLastFrame = false;
+    float MotionPreviewDistanceTravelled = 0.0f;
+    FVector InitialBodyRelativeLocation = FVector::ZeroVector;
+    FVector InitialBodyRelativeScale = FVector::OneVector;
 
     UFUNCTION()
     void HandleMotionStateChanged(const FMotionTransferResult& Result);

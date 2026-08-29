@@ -69,6 +69,10 @@ require(
     find_blueprint_component(character, unreal.MotionCarryIndicatorComponent.static_class()) is not None,
     "BP_TransmitCharacter has no owned carry indicator",
 )
+require(
+    find_blueprint_component(character, unreal.MotionDirectionIndicatorComponent.static_class()) is not None,
+    "BP_TransmitCharacter has no owned direction indicator",
+)
 
 source = blueprints["/Game/Transmit/Blueprints/BP_LinearSource"]
 source_cdo = unreal.get_default_object(source.generated_class())
@@ -83,6 +87,14 @@ receiver = blueprints["/Game/Transmit/Blueprints/BP_LinearReceiver"]
 receiver_cdo = unreal.get_default_object(receiver.generated_class())
 receiver_motion = receiver_cdo.get_editor_property("motion")
 require(receiver_motion.get_editor_property("can_receive_motion"), "Receiver must receive Motion")
+require(receiver_motion.get_editor_property("require_direction"), "Receiver must validate direction")
+required_direction = receiver_motion.get_editor_property("required_direction")
+require(
+    abs(required_direction.x - 1.0) < 0.001
+    and abs(required_direction.y) < 0.001
+    and abs(required_direction.z) < 0.001,
+    "Receiver direction requirement drift",
+)
 require(
     receiver_motion.get_editor_property("endpoint_mode")
     == unreal.MotionEndpointMode.CONSUME_ON_RECEIVE,
@@ -113,14 +125,13 @@ world = unreal.EditorLoadingAndSavingUtils.load_map("/Game/Transmit/Maps/L_TestC
 require(world is not None, "Could not load L_TestChamber")
 actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 actor_labels = {actor.get_actor_label() for actor in actor_subsystem.get_all_level_actors()}
-for expected_label in (
+required_actor_labels = (
     "PlayerStart_EXP001",
     "Source_Linear_001",
     "Receiver_Linear_001",
     "RoomReset_EXP001",
-    "TestChamber_Floor",
-    "Occlusion_TestWall",
-):
+)
+for expected_label in required_actor_labels:
     require(expected_label in actor_labels, f"Missing map actor: {expected_label}")
 
 game_mode = blueprints["/Game/Transmit/Blueprints/BP_TransmitGameMode"]

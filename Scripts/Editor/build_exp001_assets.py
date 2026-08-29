@@ -1,4 +1,5 @@
 import unreal
+import sys
 
 from toolset_registry.helpers import compile_blueprint, create_asset
 
@@ -7,6 +8,7 @@ ASSET_ROOT = "/Game/Transmit"
 BLUEPRINT_ROOT = f"{ASSET_ROOT}/Blueprints"
 INPUT_ROOT = f"{ASSET_ROOT}/Input"
 MAP_ROOT = f"{ASSET_ROOT}/Maps"
+STAGES = ("inputs", "blueprints", "map")
 
 
 def log(message):
@@ -145,6 +147,12 @@ def configure_character_blueprint():
         "MotionCarryIndicator",
     )
     carry_indicator.set_editor_property("relative_location", unreal.Vector(0.0, 0.0, 90.0))
+    direction_indicator = find_or_add_blueprint_component(
+        blueprint,
+        unreal.MotionDirectionIndicatorComponent.static_class(),
+        "MotionDirectionIndicator",
+    )
+    direction_indicator.set_editor_property("relative_location", unreal.Vector(0.0, 0.0, 110.0))
 
     compile_blueprint(blueprint)
     return blueprint
@@ -185,6 +193,9 @@ def configure_endpoint_blueprints():
     receiver_motion.set_editor_property("starts_with_motion", False)
     receiver_motion.set_editor_property("can_provide_motion", False)
     receiver_motion.set_editor_property("can_receive_motion", True)
+    receiver_motion.set_editor_property("require_direction", True)
+    receiver_motion.set_editor_property("required_direction", unreal.Vector(1.0, 0.0, 0.0))
+    receiver_motion.set_editor_property("minimum_direction_dot", 0.95)
     receiver_motion.set_editor_property(
         "endpoint_mode",
         unreal.MotionEndpointMode.CONSUME_ON_RECEIVE,
@@ -238,116 +249,152 @@ def save_assets(assets):
             raise RuntimeError(f"Failed to save {asset.get_path_name()}")
 
 
-def spawn_static_mesh(actor_subsystem, mesh, label, location, scale):
-    actor = actor_subsystem.spawn_actor_from_class(
-        unreal.StaticMeshActor,
-        location,
-        unreal.Rotator(),
-    )
-    actor.set_actor_label(label)
-    actor.set_actor_scale3d(scale)
-    component = actor.get_component_by_class(unreal.StaticMeshComponent)
-    component.set_static_mesh(mesh)
-    return actor
+def load_input_assets():
+    names = ("IA_MotionCapture", "IA_MotionTransfer", "IA_RoomReset", "IMC_Transmit")
+    assets = []
+    missing = []
+    for name in names:
+        path = f"{INPUT_ROOT}/{name}"
+        asset = unreal.load_asset(path)
+        if not asset:
+            missing.append(path)
+        else:
+            assets.append(asset)
+            log(f"Loaded input asset {path}")
+    if missing:
+        raise RuntimeError(
+            "blueprints stage requires existing input assets; run the 'inputs' stage first. "
+            f"Missing: {', '.join(missing)}"
+        )
+    return tuple(assets)
 
 
-def create_test_map(source, receiver, game_mode):
+def standardize_actor_label(actor, canonical_label):
+    if actor.get_actor_label() != canonical_label:
+        actor.set_actor_label(canonical_label)
+        log(f"Standardized actor label to {canonical_label}")
+
+
+def standardize_first_actor_label(actors, kind, canonical_label):
+    if not actors:
+        raise RuntimeError(
+            f"L_TestChamber has no {kind}; add it manually, then rerun the map stage"
+        )
+    if len(actors) > 1:
+        log(f"L_TestChamber has {len(actors)} {kind} actors; standardizing the first only")
+    standardize_actor_label(actors[0], canonical_label)
+
+
+def run_inputs_stage():
+    save_assets(list(configure_input_assets()))
+
+
+def run_blueprints_stage():
+    capture, transfer, reset, transmit_context = load_input_assets()
+    character = configure_character_blueprint()
+    source, receiver = configure_endpoint_blueprints()
+    controller = configure_controller_blueprint(capture, transfer, reset, transmit_context)
+    game_mode = configure_game_mode_blueprint(character, controller)
+    save_assets([character, source, receiver, controller, game_mode])
+
+
+def run_map_stage():
     map_path = f"{MAP_ROOT}/L_TestChamber"
-    if unreal.EditorAssetLibrary.does_asset_exist(map_path):
-        log(f"Map already exists; preserved {map_path}")
-        return
+    if not unreal.EditorAssetLibrary.does_asset_exist(map_path):
+        raise RuntimeError(
+            f"{map_path} does not exist; the map stage preserves the existing map and never rebuilds it. "
+            "Restore or create L_TestChamber manually, then rerun."
+        )
 
-    world = unreal.EditorLoadingAndSavingUtils.new_blank_map(True)
+    blueprint_paths = (
+        f"{BLUEPRINT_ROOT}/BP_TransmitGameMode",
+        f"{BLUEPRINT_ROOT}/BP_LinearSource",
+        f"{BLUEPRINT_ROOT}/BP_LinearReceiver",
+    )
+    game_mode, source_bp, receiver_bp = [
+        unreal.load_asset(path) for path in blueprint_paths
+    ]
+    missing = [
+        path
+        for path, asset in zip(blueprint_paths, (game_mode, source_bp, receiver_bp))
+        if not asset
+    ]
+    if missing:
+        raise RuntimeError(
+            "map stage requires existing Transmit blueprints; run the 'blueprints' stage first. "
+            f"Missing: {', '.join(missing)}"
+        )
+    for asset in (game_mode, source_bp, receiver_bp):
+        if not isinstance(asset, unreal.Blueprint):
+            raise RuntimeError(f"{asset.get_path_name()} is not a Blueprint")
+
+    world = unreal.EditorLoadingAndSavingUtils.load_map(map_path)
+    if not world:
+        raise RuntimeError(f"Failed to load {map_path}")
     actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
-    cube = unreal.load_asset("/Engine/BasicShapes/Cube")
-
-    spawn_static_mesh(
-        actor_subsystem,
-        cube,
-        "TestChamber_Floor",
-        unreal.Vector(400.0, 0.0, -50.0),
-        unreal.Vector(18.0, 12.0, 0.5),
-    )
-    spawn_static_mesh(
-        actor_subsystem,
-        cube,
-        "Occlusion_TestWall",
-        unreal.Vector(400.0, -500.0, 150.0),
-        unreal.Vector(0.5, 2.0, 2.0),
-    )
-
-    player_start = actor_subsystem.spawn_actor_from_class(
-        unreal.PlayerStart,
-        unreal.Vector(-650.0, 0.0, 100.0),
-        unreal.Rotator(0.0, 0.0, 0.0),
-    )
-    player_start.set_actor_label("PlayerStart_EXP001")
-
-    source_actor = actor_subsystem.spawn_actor_from_class(
-        source.generated_class(),
-        unreal.Vector(0.0, 0.0, 100.0),
-        unreal.Rotator(),
-    )
-    source_actor.set_actor_label("Source_Linear_001")
-
-    receiver_actor = actor_subsystem.spawn_actor_from_class(
-        receiver.generated_class(),
-        unreal.Vector(900.0, 250.0, 100.0),
-        unreal.Rotator(),
-    )
-    receiver_actor.set_actor_label("Receiver_Linear_001")
-
-    reset_actor = actor_subsystem.spawn_actor_from_class(
-        unreal.MotionRoomResetController,
-        unreal.Vector(400.0, 0.0, 0.0),
-        unreal.Rotator(),
-    )
-    reset_actor.set_actor_label("RoomReset_EXP001")
-    reset_actor.set_editor_property("auto_discover_transferable_participants", True)
-
-    directional_light = actor_subsystem.spawn_actor_from_class(
-        unreal.DirectionalLight,
-        unreal.Vector(0.0, 0.0, 600.0),
-        unreal.Rotator(-45.0, -30.0, 0.0),
-    )
-    directional_light.set_actor_label("KeyLight_EXP001")
-    sky_light = actor_subsystem.spawn_actor_from_class(
-        unreal.SkyLight,
-        unreal.Vector(0.0, 0.0, 500.0),
-        unreal.Rotator(),
-    )
-    sky_light.set_actor_label("SkyLight_EXP001")
 
     world.get_world_settings().set_editor_property(
         "default_game_mode",
         game_mode.generated_class(),
     )
+
+    reset_actors = unreal.GameplayStatics.get_all_actors_of_class(
+        world,
+        unreal.MotionRoomResetController.static_class(),
+    )
+    if len(reset_actors) > 1:
+        labels = ", ".join(actor.get_actor_label() for actor in reset_actors)
+        raise RuntimeError(
+            f"L_TestChamber must contain exactly one MotionRoomResetController; "
+            f"found {len(reset_actors)}: {labels}. Remove the extras manually, then rerun."
+        )
+    if reset_actors:
+        reset_actor = reset_actors[0]
+    else:
+        reset_actor = actor_subsystem.spawn_actor_from_class(
+            unreal.MotionRoomResetController,
+            unreal.Vector(0.0, 0.0, 0.0),
+            unreal.Rotator(),
+        )
+        reset_actor.set_actor_label("RoomReset_EXP001")
+        log("Spawned missing MotionRoomResetController as RoomReset_EXP001")
+    reset_actor.set_editor_property("auto_discover_transferable_participants", True)
+
+    player_starts = unreal.GameplayStatics.get_all_actors_of_class(
+        world,
+        unreal.PlayerStart.static_class(),
+    )
+    sources = unreal.GameplayStatics.get_all_actors_of_class(
+        world,
+        source_bp.generated_class(),
+    )
+    receivers = unreal.GameplayStatics.get_all_actors_of_class(
+        world,
+        receiver_bp.generated_class(),
+    )
+    standardize_first_actor_label(player_starts, "PlayerStart actor", "PlayerStart_EXP001")
+    standardize_first_actor_label(sources, "Source actor", "Source_Linear_001")
+    standardize_first_actor_label(receivers, "Receiver actor", "Receiver_Linear_001")
+
     if not unreal.EditorLoadingAndSavingUtils.save_map(world, map_path):
         raise RuntimeError(f"Failed to save {map_path}")
 
 
 def main():
-    capture, transfer, reset, transmit_context = configure_input_assets()
-    character = configure_character_blueprint()
-    source, receiver = configure_endpoint_blueprints()
-    controller = configure_controller_blueprint(capture, transfer, reset, transmit_context)
-    game_mode = configure_game_mode_blueprint(character, controller)
-
-    save_assets(
-        [
-            capture,
-            transfer,
-            reset,
-            transmit_context,
-            character,
-            source,
-            receiver,
-            controller,
-            game_mode,
-        ]
-    )
-    create_test_map(source, receiver, game_mode)
-    log("SUCCESS")
+    args = sys.argv[1:]
+    if len(args) != 1 or args[0] not in STAGES:
+        raise RuntimeError(
+            f"EXP001_GENERATE usage: pass exactly one stage ({' | '.join(STAGES)}); "
+            "refusing to run without an explicit stage"
+        )
+    stage = args[0]
+    if stage == "inputs":
+        run_inputs_stage()
+    elif stage == "blueprints":
+        run_blueprints_stage()
+    else:
+        run_map_stage()
+    log(f"SUCCESS stage={stage}")
 
 
 main()
