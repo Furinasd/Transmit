@@ -9,13 +9,13 @@
 | 项目 | 当前状态 |
 | --- | --- |
 | 引擎 | Unreal Engine 5.8（最近一次本地检查为 5.8.1） |
-| 当前阶段 | M0：玩法契约、架构边界与 EXP-001 准备 |
-| 当前实现 | UE 第三人称 Blueprint 模板、输入/角色/关卡原型资源、设计与架构文档 |
+| 当前阶段 | EXP-001：最小转移闭环（工程验证完成） |
+| 当前实现 | C++ Motion 核心（FMotionState / UMotionTransferComponent / IMotionTransferable / Room Reset）+ Transmit Blueprints + `L_TestChamber` |
 | 核心目标 | 验证最小 `Source → Player → Receiver` 运动转移闭环 |
 | 版本管理 | Git + Git LFS |
 
 > [!IMPORTANT]
-> 当前仓库尚未实现 Motion State、Capture、Carry 或 Transfer 的可玩运行时链路。本文中的核心系统架构与关卡规划属于已定义的目标边界，不代表玩法已经完成。
+> **EXP-001 Engineering Validated**：`Source → Player → Receiver` 的 Capture / Carry / Transfer / Consume / Room Reset 闭环已在 PIE 验证（含 20/20 Reset）。human readability 与作品集级玩法验收仍未完成；v0.3 direction semantics 待 contract promotion，本 PR 不实现。
 
 ## 核心玩法
 
@@ -45,8 +45,10 @@
 ```text
 Transmit/
 ├─ Config/                 # 项目默认配置、输入与启动地图
+├─ Source/passely/         # EXP-001 Motion 核心 C++：状态、事务、接口、Reset、自动化测试
 ├─ Content/
 │  ├─ ThirdPerson/         # 当前角色、GameMode 与入口关卡
+│  ├─ Transmit/            # EXP-001 输入、蓝图与 L_TestChamber
 │  ├─ Input/               # Enhanced Input 资源
 │  ├─ LevelPrototyping/    # 门、跳板、目标与灰盒资源
 │  ├─ Characters/          # Mannequin 角色、动画与材质资源
@@ -61,7 +63,7 @@ Transmit/
 
 ## 目标技术架构
 
-当前工程仍是 Blueprint 模板骨架。M0 计划采用“C++ 核心规则 + Blueprint 表现与关卡装配”的边界：
+当前工程已实现“C++ 核心规则 + Blueprint 表现与关卡装配”的边界（EXP-001）：
 
 ```text
 Enhanced Input / Blueprint
@@ -80,6 +82,28 @@ Blueprint：材质、VFX、音频、动画、UI 与关卡反馈
 ```
 
 C++ 负责状态不变量、事务、兼容性判断、重置契约和可测试的确定性规则；Blueprint 负责输入绑定、目标反馈、表现层以及关卡教学节奏。详细边界见 [`Docs/ARCHITECTURE.md`](Docs/ARCHITECTURE.md)。
+
+## 当前可玩闭环（EXP-001）
+
+`L_TestChamber` 已装配一条最小闭环：
+
+```text
+Source_Linear_001（持有 +X / 600 的 Linear Motion）
+        ↓ 按 E 捕获（Capture）
+Player（携带唯一 Motion State，指示灯 + 方向箭头反馈）
+        ↓ 按 Q 转移（Transfer）
+Receiver_Linear_001（校验方向后消费 Consume）
+        ↓ 按 R 房间重置（Reset）
+Source 恢复快照，Player / Receiver 清空
+```
+
+已验证（PIE，2026-08-30）：
+
+- Capture `Source.Linear.001 → Player` 成功，Source 停止持有。
+- Transfer `Player → Receiver.Linear.001` 成功并消费，Player 清空。
+- 拒绝路径：`SourceEmpty` / `CarrierOccupied` / `InvalidSource` 均按契约返回且不丢失状态。
+- 房间 Reset：20/20 连续循环通过，`participants=3, success=true`，无重复/丢失 Motion State。
+- 入口：`/Game/Transmit/Maps/L_TestChamber`（编辑器启动图仍为模板 `Lvl_ThirdPerson`）。
 
 ## 运行项目
 
@@ -112,20 +136,26 @@ git lfs pull
 | UE 5.8.1 编辑器启动 | 已观察通过 | 本地日志记录成功初始化 |
 | 当前地图检查 | 0 error / 0 warning | 本地编辑器日志 |
 | Blueprint 批量编译 | 0 error / 0 warning / 0 load failure | 编译本身完成；进程因本机 DDC/Zen 无可写节点返回 1 |
-| Motion Transfer 可玩闭环 | 未实现 | 当前没有自定义 C++ 或 Transfer 运行时链路 |
-| PIE 玩法验收 | 未验证 | 尚无 EXP-001 可玩实现 |
+| EXP-001 可玩闭环（PIE） | 已通过 | Capture / Transfer / Consume 成功，E/Q/R 可用 |
+| 20/20 Room Reset | 已通过 | PIE 自动化 R 键 + 状态校验（`Saved/Logs/passely.log`，2026-08-30） |
+| human readability / 首次玩家理解 | 未验证 | 尚未执行首次玩家盲测（Sep 1 门禁） |
 | Build / Packaging / 跨平台 | 未验证 | 尚未执行干净构建与打包门禁 |
 
 ## 开发路线
 
-1. **EXP-001：最小直接转移闭环**  
-   实现一个 Linear Source、玩家携带状态、一个 Receiver、明确的 Capture/Transfer 反馈以及房间 Reset。
+1. **EXP-001：最小直接转移闭环（已完成工程验证）**  
+   Linear Source、玩家携带、Receiver 消费与房间 Reset 已在 PIE 验证；进入可读性与首次玩家理解阶段。
 2. **L1：证明玩法可读性与重复意愿**  
    验证首次玩家能在 60–90 秒内完成闭环，并理解“移动的是运动，而不是物体”。
 3. **L2：验证方向推理**  
    仅在 L1 通过后加入确定性的 Redirect/Relay，不扩展第二套交互语法。
 4. **L3：验证威胁反转**  
    将 Charger 的冲刺同时作为威胁和高强度运动来源，验证战斗与解谜能否共用同一系统。
+
+## Next
+
+- **Gameplay Coverage**：首次玩家理解测试、更多 L1 覆盖（瞄准/遮挡/不兼容/拒绝路径、人工 20/20 Reset）。
+- **v0.3 Design Promotion**：将 v0.3 direction semantics 先推进到契约层（`DESIGN_CONTRACT.md` / `ARCHITECTURE.md`），本 PR 不实现 v0.3。
 
 ## 项目文档
 

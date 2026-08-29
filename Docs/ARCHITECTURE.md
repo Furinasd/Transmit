@@ -1,6 +1,6 @@
 # Transmit Architecture
 
-> Status: Current Blueprint skeleton plus proposed M0 Motion Transfer target. The repository contains no Motion Transfer implementation; proposed sections do not claim otherwise.
+> Status: EXP-001 engineering validated. A C++ Motion core and a Transmit Blueprint layer under `/Game/Transmit` are implemented; sections still marked "Proposed" are target design, and the pre-v0.3 direction semantics are superseded / pending promotion (not implemented in this PR).
 
 ## Scope
 
@@ -19,13 +19,15 @@ Read project context in this order:
 
 The GitHub repository is named `Transmit`. The Unreal project file and internal game name remain `passely`; renaming those identifiers is outside this architecture bootstrap because serialized assets and future native-module paths may depend on them.
 
-This is currently a Blueprint-only project. There is no custom C++ module under `Source/` and no project-local plugin content under `Plugins/`.
+The project now has a custom C++ runtime module under `Source/passely/` (Motion types, ownership component, Actor interface, interactor, room reset, endpoint/indicator actors, and focused automation tests) plus a Blueprint layer under `Content/Transmit/` (input assets, Character/Controller/GameMode/Source/Receiver Blueprints, and `L_TestChamber`). There is no project-local plugin content under `Plugins/`.
 
 | Boundary | Current responsibility |
 | --- | --- |
 | `passely.uproject` | Unreal project entrypoint and Engine-plugin declarations |
 | `Config/DefaultEngine.ini` | Startup map, default GameMode, renderer, target-platform, asset-manager, and project settings |
+| `Source/passely/` | EXP-001 Motion core C++: `FMotionState`, `UMotionTransferComponent`, `IMotionTransferable`, interactor, room reset, endpoint/direction indicators, automation tests |
 | `Content/ThirdPerson/` | Current map plus Character, PlayerController, and GameMode Blueprints |
+| `Content/Transmit/` | EXP-001 Blueprint layer: Transmit input assets, Character/Controller/GameMode/Source/Receiver Blueprints, `L_TestChamber` |
 | `Content/Input/` | Enhanced Input actions, mapping contexts, and touch interface assets |
 | `Content/Characters/Mannequins/` | Manny/Quinn meshes, rigs, materials, textures, and animation library |
 | `Content/LevelPrototyping/` | Template geometry, materials, and sample interactables used for level assembly |
@@ -48,7 +50,7 @@ Enhanced Input mappings/actions
 Mannequin animation and level presentation assets
 ```
 
-The configuration-to-asset path above is present. Blueprint graph behavior was not exhaustively inspected, and no Transfer path exists yet.
+The configuration-to-asset path above is present. A Transfer path now exists under `/Game/Transmit` (`L_TestChamber`); Blueprint graph behavior still requires human playtest acceptance.
 
 ### Current Dependencies and Persistence
 
@@ -88,7 +90,7 @@ Environment Converter
 
 The actor owns the component. The component is the only runtime writer of `CurrentMotion`; Player, Enemy, and Environment presentation can observe it but cannot mutate it directly. One successful Capture or Transfer atomically moves the value between components.
 
-This technical ownership proposal is recorded in `Decisions/ADR-001-transfer-state.md` and remains proposed until EXP-001 proves the smallest runtime path.
+This technical ownership model is recorded in `Decisions/ADR-001-transfer-state.md`; EXP-001 has now proven the smallest runtime path in PIE.
 
 ## Proposed Interfaces
 
@@ -108,6 +110,8 @@ The initial C++ surface should remain small:
 Exact Unreal signatures, result structs, replication policy, and lifecycle hooks remain implementation decisions.
 
 ## Target Selection Boundary
+
+> **Direction semantics (superseded / pending promotion, v0.3):** the rule below (“aim never supplies output direction”) is the pre-v0.3 rule implemented by EXP-001. v0.3 direction semantics are under design promotion and are **not** implemented in this PR.
 
 Third-person aim chooses candidates; it never supplies output direction.
 
@@ -219,4 +223,10 @@ Core Motion Transfer code must not depend on a specific Player, Enemy, Environme
 
 ## Current Implementation Boundary
 
-As of 2026-08-28, no C++ source or Motion Transfer implementation was found in the repository. A local UE 5.8.1 Editor log records successful engine initialization and a map check with 0 errors and 0 warnings. A `CompileAllBlueprints` commandlet run completed Blueprint compilation with 0 errors, 0 warnings, and 0 load failures; the process still exited 1 because the workstation's Installed DDC/Zen cache had no writable node and used an in-memory fallback. PIE gameplay, build, packaging, and cross-platform compatibility remain unverified.
+As of 2026-08-30, EXP-001 is implemented and engineering-validated:
+
+- C++: `FMotionState`, `UMotionTransferComponent`, `IMotionTransferable`, `UMotionInteractorComponent`, `AMotionRoomResetController`, `ATransmitMotionEndpointActor`, `UMotionCarryIndicatorComponent`, `UMotionDirectionIndicatorComponent`, magnitude settings/tags, and five focused automation tests under `Transmit.MotionTransfer`.
+- Blueprint: `BP_TransmitCharacter`, `BP_TransmitPlayerController`, `BP_TransmitGameMode`, `BP_LinearSource`, `BP_LinearReceiver`, Transmit input assets, and `L_TestChamber` (PlayerStart, Source, Receiver, RoomReset with auto-discovery).
+- Static validation: 5 Blueprints compile OK; Map Check `0 Error(s), 0 Warning(s)`; `EXP001_VALIDATE SUCCESS`.
+- PIE runtime: Capture/Transfer/Consume succeed; rejection paths (`SourceEmpty`, `CarrierOccupied`, `InvalidSource`) preserve ownership; 20/20 Room Reset cycles pass with 3 participants.
+- Still unverified: first-player comprehension/readability, packaging, cross-platform, and v0.3 direction semantics (superseded / pending promotion).
