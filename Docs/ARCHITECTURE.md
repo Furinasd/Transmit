@@ -1,6 +1,6 @@
 # Transmit Architecture
 
-> Status: EXP-001 engineering validated. A C++ Motion core and a Transmit Blueprint layer under `/Game/Transmit` are implemented; sections still marked "Proposed" are target design, and the pre-v0.3 direction semantics are superseded / pending promotion (not implemented in this PR).
+> Status: EXP-001 engineering validated; v0.3 camera-driven six-direction reroute is promoted (ADR-003) and under implementation on `feat/gameplay-core-v03`. Sections still marked "Proposed" are target design.
 
 ## Scope
 
@@ -111,18 +111,25 @@ Exact Unreal signatures, result structs, replication policy, and lifecycle hooks
 
 ## Target Selection Boundary
 
-> **Direction semantics (superseded / pending promotion, v0.3):** the rule below (“aim never supplies output direction”) is the pre-v0.3 rule implemented by EXP-001. v0.3 direction semantics are under design promotion and are **not** implemented in this PR.
+Third-person aim chooses candidates; it never supplies a free output direction.
 
-Third-person aim chooses candidates; it never supplies output direction.
-
-The targeting layer produces a stable candidate plus a preview result using:
+The targeting layer (`UMotionInteractorComponent`) produces a stable candidate plus a preview result using:
 
 1. reticle angle;
 2. occlusion;
 3. distance;
-4. compatibility with the Player's current carry state.
+4. compatibility with the Player's current carry state and the resolved canonical direction.
 
 Soft-cone assistance and short target stickiness belong here. The transaction layer revalidates the selected actor at commit time and remains authoritative.
+
+## Direction Resolver Boundary (v0.3)
+
+Target selection and direction resolution are physically decoupled:
+
+- `UMotionInteractorComponent` owns target selection and carries the resolver result.
+- `UMotionCanonicalDirectionResolver` maps (carried Linear direction + gameplay camera pose) → one of six canonical directions and a world-space `ProjectedWorldDirection`, with pitch and sector hysteresis.
+- The resolution travels inside `FMotionTransferContext.DirectionResolution`, so Preview and Commit consume the **same resolver result**; the committed Transfer moves the resolved state (`Direction = ProjectedWorldDirection`) to the Target.
+- Receivers declare a `RequiredCanonicalDirection`; a mismatch is `IncompatibleDirection` and never consumes Player Motion.
 
 ## Proposed Control and Data Flow
 
@@ -150,10 +157,12 @@ Transfer input
         ↓
 Resolve IMotionTransferable Target
         ↓
-Preview + commit-time CanReceiveMotion
+Canonical Direction Resolver: carried Linear direction + gameplay camera
+        → one of Forward / Back / Left / Right / Up / Down
         ↓
-Atomically clear Player.CurrentMotion
-and set or consume Target state
+Preview + commit-time CanReceiveMotion(resolved state, same resolution)
+        ↓
+Atomically clear Player.CurrentMotion and set/consume resolved state at Target
         ↓
 Emit transferred/state-changed result
         ↓
@@ -171,7 +180,7 @@ A converter is a deterministic mapping from an input Motion signature and entry 
 - `PreviewOutputSignature` must use the same rule as committed conversion.
 - Critical conversion should use constrained or authored motion when full Chaos simulation would make identical inputs diverge.
 
-Converters do not authorize the Player to rewrite direction and do not become level-specific scripted keys.
+Converters do not authorize the Player to rewrite direction freely. Under v0.3, the only P0 direction change is the camera-driven canonical reroute at Transfer; Redirect Rail is superseded for P0 L2 (ADR-003) and remains a possible deterministic converter.
 
 ## Proposed Event Boundary
 
@@ -223,10 +232,9 @@ Core Motion Transfer code must not depend on a specific Player, Enemy, Environme
 
 ## Current Implementation Boundary
 
-As of 2026-08-30, EXP-001 is implemented and engineering-validated:
+As of 2026-09-01, Part 1 (Core Logic Coverage) is in progress on `feat/gameplay-core-v03`:
 
-- C++: `FMotionState`, `UMotionTransferComponent`, `IMotionTransferable`, `UMotionInteractorComponent`, `AMotionRoomResetController`, `ATransmitMotionEndpointActor`, `UMotionCarryIndicatorComponent`, `UMotionDirectionIndicatorComponent`, magnitude settings/tags, and five focused automation tests under `Transmit.MotionTransfer`.
-- Blueprint: `BP_TransmitCharacter`, `BP_TransmitPlayerController`, `BP_TransmitGameMode`, `BP_LinearSource`, `BP_LinearReceiver`, Transmit input assets, and `L_TestChamber` (PlayerStart, Source, Receiver, RoomReset with auto-discovery).
-- Static validation: 5 Blueprints compile OK; Map Check `0 Error(s), 0 Warning(s)`; `EXP001_VALIDATE SUCCESS`.
-- PIE runtime: Capture/Transfer/Consume succeed; rejection paths (`SourceEmpty`, `CarrierOccupied`, `InvalidSource`) preserve ownership; 20/20 Room Reset cycles pass with 3 participants.
-- Still unverified: first-player comprehension/readability, packaging, cross-platform, and v0.3 direction semantics (superseded / pending promotion).
+- New v0.3 core: `UMotionCanonicalDirectionResolver` (six canonical directions, pitch + sector hysteresis, deterministic), `FMotionDirectionResolution` carried inside `FMotionTransferContext`, `EMotionCanonicalDirection` Receiver requirements, `ATransmitChargerActor` + `UMotionChargerStateMachine` (Telegraph → Dash → Recovery with a capture window), `EMotionTransferRejection::TimingRejected`, and `UMotionTransferComponent::GrantMotionState`.
+- Preview = Commit: the interactor resolves the carried direction once per frame and passes the same resolution into `TryTransferToActor`; the committed Transfer moves the resolved state (`Direction = ProjectedWorldDirection`), and receivers evaluate `RequiredCanonicalDirection` against that same resolution.
+- Static validation: `passelyEditor` builds; 8/8 `Transmit.MotionTransfer` automation tests pass (resolver determinism/hysteresis, resolved transfer + `IncompatibleDirection` preserves ownership, Charger capture window, 20-cycle Reset, rejection, notification reentrancy, magnitude policy, sticky scoring); Blueprint stage and `EXP001_VALIDATE SUCCESS` (5 Blueprints compile, Receiver requires Canonical Forward, Map Check clean).
+- Still unverified: PIE under the new reroute semantics, micro test cells, a level-placed Charger, first-player comprehension, packaging, and cross-platform.

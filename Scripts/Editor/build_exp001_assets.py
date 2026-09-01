@@ -193,9 +193,10 @@ def configure_endpoint_blueprints():
     receiver_motion.set_editor_property("starts_with_motion", False)
     receiver_motion.set_editor_property("can_provide_motion", False)
     receiver_motion.set_editor_property("can_receive_motion", True)
-    receiver_motion.set_editor_property("require_direction", True)
-    receiver_motion.set_editor_property("required_direction", unreal.Vector(1.0, 0.0, 0.0))
-    receiver_motion.set_editor_property("minimum_direction_dot", 0.95)
+    receiver_motion.set_editor_property(
+        "required_canonical_direction",
+        unreal.MotionCanonicalDirection.FORWARD,
+    )
     receiver_motion.set_editor_property(
         "endpoint_mode",
         unreal.MotionEndpointMode.CONSUME_ON_RECEIVE,

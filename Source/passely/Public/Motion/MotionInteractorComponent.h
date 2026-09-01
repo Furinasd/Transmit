@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 
+#include "Motion/MotionCanonicalDirectionResolver.h"
 #include "Motion/MotionTransferTypes.h"
 #include "MotionInteractorComponent.generated.h"
 
@@ -36,6 +37,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Motion|Interaction")
     FMotionTransferResult RequestTransfer();
 
+    UPROPERTY(Instanced, EditAnywhere, Category = "Motion|Direction")
+    TObjectPtr<UMotionCanonicalDirectionResolver> DirectionResolver;
+
     UFUNCTION(BlueprintPure, Category = "Motion|Targeting")
     FMotionInteractionPreview GetCurrentPreview() const;
 
@@ -66,6 +70,9 @@ private:
         FName ParticipantId = NAME_None;
         float RawScore = -BIG_NUMBER;
         bool bEligible = false;
+        EMotionCanonicalDirection CanonicalDirection = EMotionCanonicalDirection::None;
+        FVector ProjectedWorldDirection = FVector::ZeroVector;
+        bool bHasProjectedDirection = false;
         FMotionCompatibilityResult Compatibility;
         FGameplayTag MagnitudeTier;
         FMotionTransferContext Context;
@@ -100,12 +107,12 @@ private:
     double LastRequestTimeSeconds = -BIG_NUMBER;
 
     UMotionTransferComponent* ResolvePlayerMotionComponent() const;
-    bool GetViewPoint(FVector& OutOrigin, FVector& OutForward) const;
+    bool GetViewPoint(FVector& OutOrigin, FRotator& OutRotation) const;
     void GatherCandidates(TArray<FCandidateEvaluation>& OutCandidates) const;
     FCandidateEvaluation EvaluateCandidate(
         AActor* Candidate,
         const FVector& ViewOrigin,
-        const FVector& ViewForward,
+        const FRotator& ViewRotation,
         const UMotionTransferComponent* PlayerMotion) const;
     static bool IsBetterCandidate(
         const FCandidateEvaluation& Candidate,

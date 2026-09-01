@@ -11,6 +11,8 @@ UMotionInteractorComponent::UMotionInteractorComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
     PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
+    DirectionResolver = CreateDefaultSubobject<UMotionCanonicalDirectionResolver>(
+        TEXT("DirectionResolver"));
 }
 
 void UMotionInteractorComponent::TickComponent(
@@ -241,7 +243,9 @@ UMotionTransferComponent* UMotionInteractorComponent::ResolvePlayerMotionCompone
     return nullptr;
 }
 
-bool UMotionInteractorComponent::GetViewPoint(FVector& OutOrigin, FVector& OutForward) const
+bool UMotionInteractorComponent::GetViewPoint(
+    FVector& OutOrigin,
+    FRotator& OutRotation) const
 {
     const AActor* Owner = GetOwner();
     if (!Owner)
@@ -251,8 +255,8 @@ bool UMotionInteractorComponent::GetViewPoint(FVector& OutOrigin, FVector& OutFo
 
     FRotator ViewRotation;
     Owner->GetActorEyesViewPoint(OutOrigin, ViewRotation);
-    OutForward = ViewRotation.Vector().GetSafeNormal();
-    return !OutForward.IsNearlyZero();
+    OutRotation = ViewRotation;
+    return !ViewRotation.Vector().IsNearlyZero();
 }
 
 void UMotionInteractorComponent::GatherCandidates(
@@ -261,8 +265,8 @@ void UMotionInteractorComponent::GatherCandidates(
     const UWorld* World = GetWorld();
     UMotionTransferComponent* PlayerMotion = ResolvePlayerMotionComponent();
     FVector ViewOrigin;
-    FVector ViewForward;
-    if (!World || !PlayerMotion || !GetViewPoint(ViewOrigin, ViewForward))
+    FRotator ViewRotation;
+    if (!World || !PlayerMotion || !GetViewPoint(ViewOrigin, ViewRotation))
     {
         return;
     }
@@ -292,7 +296,7 @@ void UMotionInteractorComponent::GatherCandidates(
 
         SeenActors.Add(Candidate);
         FCandidateEvaluation Evaluation =
-            EvaluateCandidate(Candidate, ViewOrigin, ViewForward, PlayerMotion);
+            EvaluateCandidate(Candidate, ViewOrigin, ViewRotation, PlayerMotion);
         if (Evaluation.RawScore > -BIG_NUMBER)
         {
             OutCandidates.Add(MoveTemp(Evaluation));
@@ -303,11 +307,12 @@ void UMotionInteractorComponent::GatherCandidates(
 UMotionInteractorComponent::FCandidateEvaluation UMotionInteractorComponent::EvaluateCandidate(
     AActor* Candidate,
     const FVector& ViewOrigin,
-    const FVector& ViewForward,
+    const FRotator& ViewRotation,
     const UMotionTransferComponent* PlayerMotion) const
 {
     FCandidateEvaluation Evaluation;
     Evaluation.Actor = Candidate;
+    Evaluation.Context.Requester = GetOwner();
 
     UMotionTransferComponent* TargetMotion =
         IMotionTransferable::Execute_GetMotionTransferComponent(Candidate);
@@ -329,7 +334,7 @@ UMotionInteractorComponent::FCandidateEvaluation UMotionInteractorComponent::Eva
         return Evaluation;
     }
 
-    const float DotProduct = FVector::DotProduct(ViewForward, ToTarget / Distance);
+    const float DotProduct = FVector::DotProduct(ViewRotation.Vector(), ToTarget / Distance);
     const float MinimumDot = FMath::Cos(FMath::DegreesToRadians(AimConeHalfAngleDegrees));
     if (DotProduct < MinimumDot)
     {
@@ -355,7 +360,6 @@ UMotionInteractorComponent::FCandidateEvaluation UMotionInteractorComponent::Eva
         ECC_Visibility,
         OcclusionParams);
 
-    Evaluation.Context.Requester = GetOwner();
     Evaluation.Context.bInRange = true;
     Evaluation.Context.bOccluded = bOccluded;
     Evaluation.Context.Distance = Distance;
@@ -364,9 +368,23 @@ UMotionInteractorComponent::FCandidateEvaluation UMotionInteractorComponent::Eva
     {
         FMotionState CarriedState;
         PlayerMotion->TryGetMotionState(CarriedState);
+        const FMotionDirectionResolution Resolution =
+            DirectionResolver
+                ? DirectionResolver->ResolveDirection(CarriedState.Direction, ViewRotation)
+                : FMotionDirectionResolution();
+        Evaluation.CanonicalDirection = Resolution.CanonicalDirection;
+        Evaluation.ProjectedWorldDirection = Resolution.WorldDirection;
+        Evaluation.bHasProjectedDirection = Resolution.bValid;
+        Evaluation.Context.DirectionResolution = Resolution;
+
+        FMotionState ResolvedState = CarriedState;
+        if (Resolution.bValid)
+        {
+            ResolvedState.Direction = Resolution.WorldDirection.GetSafeNormal();
+        }
         Evaluation.Compatibility = IMotionTransferable::Execute_CanReceiveMotion(
             Candidate,
-            CarriedState,
+            ResolvedState,
             Evaluation.Context);
         Evaluation.MagnitudeTier = PlayerMotion->GetMagnitudeTier();
     }
@@ -408,6 +426,9 @@ void UMotionInteractorComponent::ApplySelectedCandidate(
         NewPreview.Rejection = Selection->Compatibility.Rejection;
         NewPreview.RawScore = Selection->RawScore;
         NewPreview.MagnitudeTier = Selection->MagnitudeTier;
+        NewPreview.CanonicalDirection = Selection->CanonicalDirection;
+        NewPreview.ProjectedWorldDirection = Selection->ProjectedWorldDirection;
+        NewPreview.bHasProjectedDirection = Selection->bHasProjectedDirection;
         CurrentTargetContext = Selection->Context;
     }
     else
@@ -419,7 +440,10 @@ void UMotionInteractorComponent::ApplySelectedCandidate(
         || CurrentPreview.Verb != NewPreview.Verb
         || CurrentPreview.bEligible != NewPreview.bEligible
         || CurrentPreview.Rejection != NewPreview.Rejection
-        || CurrentPreview.MagnitudeTier != NewPreview.MagnitudeTier;
+        || CurrentPreview.MagnitudeTier != NewPreview.MagnitudeTier
+        || CurrentPreview.CanonicalDirection != NewPreview.CanonicalDirection
+        || CurrentPreview.ProjectedWorldDirection != NewPreview.ProjectedWorldDirection
+        || CurrentPreview.bHasProjectedDirection != NewPreview.bHasProjectedDirection;
 
     CurrentTarget = NewPreview.Target;
     CurrentPreview = NewPreview;

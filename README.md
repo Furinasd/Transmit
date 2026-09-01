@@ -9,13 +9,13 @@
 | 项目 | 当前状态 |
 | --- | --- |
 | 引擎 | Unreal Engine 5.8（最近一次本地检查为 5.8.1） |
-| 当前阶段 | EXP-001：最小转移闭环（工程验证完成） |
-| 当前实现 | C++ Motion 核心（FMotionState / UMotionTransferComponent / IMotionTransferable / Room Reset）+ Transmit Blueprints + `L_TestChamber` |
-| 核心目标 | 验证最小 `Source → Player → Receiver` 运动转移闭环 |
+| 当前阶段 | Part 1：v0.3 Core Logic Coverage（Gate A 验证中） |
+| 当前实现 | EXP-001 闭环 + v0.3 Canonical Direction Resolver / Preview=Commit / Charger Core |
+| 核心目标 | 在 `L_TestChamber` 完成 v0.3 PIE、micro cells 与 Charger 可玩验证 |
 | 版本管理 | Git + Git LFS |
 
 > [!IMPORTANT]
-> **EXP-001 Engineering Validated**：`Source → Player → Receiver` 的 Capture / Carry / Transfer / Consume / Room Reset 闭环已在 PIE 验证（含 20/20 Reset）。human readability 与作品集级玩法验收仍未完成；v0.3 direction semantics 待 contract promotion，本 PR 不实现。
+> **EXP-001 Engineering Validated；v0.3 Core Implemented**：原始 `Source → Player → Receiver` 闭环与 20/20 Reset 已在 PIE 验证。v0.3 direction semantics 已提升到契约并完成 Core、8/8 自动化与 Blueprint 静态验证；新语义 PIE、micro cells、关卡内 Charger、human readability、打包与跨平台仍未验证。
 
 ## 核心玩法
 
@@ -36,7 +36,7 @@
 核心设计约束：
 
 - **唯一所有权**：一份 Motion State 同一时间只属于 Source、Player 或 Target 中的一方。
-- **方向保留**：玩家瞄准只负责选中目标，不能凭空改写运动方向。
+- **方向语义**：Capture / Carry 保留 Source Motion；Transfer 时由 gameplay camera 确定性量化到六个 Canonical Direction，Preview 与 Commit 共用同一解析结果。
 - **战斗与谜题共用语言**：敌人、机关和环境都遵循同一套运动状态规则。
 - **可读、可恢复**：合法目标、拒绝原因和状态归属必须可感知；关键资源可通过房间重置恢复。
 
@@ -139,7 +139,8 @@ git lfs pull
 | EXP-001 可玩闭环（PIE） | 已通过 | Capture / Transfer / Consume 成功，E/Q/R 可用 |
 | 20/20 Room Reset | 已通过 | PIE 自动化 R 键 + 状态校验（`Saved/Logs/passely.log`，2026-08-30） |
 | human readability / 首次玩家理解 | 未验证 | 尚未执行首次玩家盲测（Sep 1 门禁） |
-| Build / Packaging / 跨平台 | 未验证 | 尚未执行干净构建与打包门禁 |
+| v0.3 Core 自动化 | 8/8 通过 | Resolver / Preview=Commit / Charger FSM 等；尚未替代 PIE 验收 |
+| Build / Packaging / 跨平台 | 部分验证 | Win64 Editor Development 已构建；打包与 macOS 未验证 |
 
 ## 开发路线
 
@@ -148,14 +149,14 @@ git lfs pull
 2. **L1：证明玩法可读性与重复意愿**  
    验证首次玩家能在 60–90 秒内完成闭环，并理解“移动的是运动，而不是物体”。
 3. **L2：验证方向推理**  
-   仅在 L1 通过后加入确定性的 Redirect/Relay，不扩展第二套交互语法。
+   使用 camera-driven Canonical Direction reroute 验证空间推理，不扩展第二套交互语法。
 4. **L3：验证威胁反转**  
    将 Charger 的冲刺同时作为威胁和高强度运动来源，验证战斗与解谜能否共用同一系统。
 
 ## Next
 
-- **Gameplay Coverage**：首次玩家理解测试、更多 L1 覆盖（瞄准/遮挡/不兼容/拒绝路径、人工 20/20 Reset）。
-- **v0.3 Design Promotion**：将 v0.3 direction semantics 先推进到契约层（`DESIGN_CONTRACT.md` / `ARCHITECTURE.md`），本 PR 不实现 v0.3。
+- **Gate A**：在 `L_TestChamber` 完成 v0.3 PIE 回归、L1/L2/L3 micro cells 与关卡内 Charger 验证后冻结 Core。
+- **Gameplay Coverage**：首次玩家理解测试，以及瞄准、遮挡、不兼容和拒绝路径的人工可读性检查。
 
 ## 项目文档
 

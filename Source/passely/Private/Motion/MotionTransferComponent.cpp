@@ -103,7 +103,9 @@ FMotionCompatibilityResult UMotionTransferComponent::CanProvideMotion() const
         : FMotionCompatibilityResult::Reject(EMotionTransferRejection::InvalidMotionState);
 }
 
-FMotionCompatibilityResult UMotionTransferComponent::CanReceiveState(const FMotionState& State) const
+FMotionCompatibilityResult UMotionTransferComponent::CanReceiveState(
+    const FMotionState& State,
+    const FMotionDirectionResolution* Resolution) const
 {
     if (!bCanReceiveMotion)
     {
@@ -125,15 +127,13 @@ FMotionCompatibilityResult UMotionTransferComponent::CanReceiveState(const FMoti
         return FMotionCompatibilityResult::Reject(EMotionTransferRejection::IncompatibleType);
     }
 
-    if (bRequireDirection)
+    if (Resolution
+        && Resolution->bValid
+        && RequiredCanonicalDirection != EMotionCanonicalDirection::None
+        && Resolution->CanonicalDirection != RequiredCanonicalDirection)
     {
-        const FVector NormalizedRequiredDirection = RequiredDirection.GetSafeNormal();
-        if (NormalizedRequiredDirection.IsNearlyZero()
-            || FVector::DotProduct(State.Direction, NormalizedRequiredDirection) < MinimumDirectionDot)
-        {
-            return FMotionCompatibilityResult::Reject(
-                EMotionTransferRejection::IncompatibleDirection);
-        }
+        return FMotionCompatibilityResult::Reject(
+            EMotionTransferRejection::IncompatibleDirection);
     }
 
     const FGameplayTag MagnitudeTier =
@@ -201,8 +201,20 @@ FMotionTransferResult UMotionTransferComponent::TryTransferToActor(
             EMotionTransferRejection::SourceEmpty);
     }
 
+    FMotionState ResolvedState = CurrentMotion;
+    if (Context.DirectionResolution.bValid)
+    {
+        ResolvedState.Direction = Context.DirectionResolution.WorldDirection.GetSafeNormal();
+        if (!ResolvedState.IsValid())
+        {
+            return NotifyRejectedRequest(
+                EMotionTransferVerb::Transfer,
+                EMotionTransferRejection::InvalidMotionState);
+        }
+    }
+
     const FMotionCompatibilityResult Compatibility =
-        IMotionTransferable::Execute_CanReceiveMotion(TargetActor, CurrentMotion, Context);
+        IMotionTransferable::Execute_CanReceiveMotion(TargetActor, ResolvedState, Context);
     if (!Compatibility.bAllowed)
     {
         return NotifyRejectedRequest(EMotionTransferVerb::Transfer, Compatibility.Rejection);
@@ -210,7 +222,13 @@ FMotionTransferResult UMotionTransferComponent::TryTransferToActor(
 
     UMotionTransferComponent* TargetComponent =
         IMotionTransferable::Execute_GetMotionTransferComponent(TargetActor);
-    return TryMoveBetween(this, TargetComponent, EMotionTransferVerb::Transfer, false);
+    return TryMoveBetween(
+        this,
+        TargetComponent,
+        EMotionTransferVerb::Transfer,
+        false,
+        &ResolvedState,
+        &Context.DirectionResolution);
 }
 
 FMotionTransferResult UMotionTransferComponent::TryCaptureFromComponent(
@@ -225,11 +243,67 @@ FMotionTransferResult UMotionTransferComponent::TryTransferToComponent(
     return TryMoveBetween(this, TargetComponent, EMotionTransferVerb::Transfer, false);
 }
 
+FMotionTransferResult UMotionTransferComponent::TryTransferToComponent(
+    UMotionTransferComponent* TargetComponent,
+    const FMotionDirectionResolution& Resolution)
+{
+    FMotionState ResolvedState;
+    if (!bHasMotion || !TryGetMotionState(ResolvedState) || !Resolution.bValid)
+    {
+        return NotifyRejectedRequest(
+            EMotionTransferVerb::Transfer,
+            EMotionTransferRejection::SourceEmpty);
+    }
+
+    ResolvedState.Direction = Resolution.WorldDirection.GetSafeNormal();
+    if (!ResolvedState.IsValid())
+    {
+        return NotifyRejectedRequest(
+            EMotionTransferVerb::Transfer,
+            EMotionTransferRejection::InvalidMotionState);
+    }
+
+    return TryMoveBetween(
+        this,
+        TargetComponent,
+        EMotionTransferVerb::Transfer,
+        false,
+        &ResolvedState,
+        &Resolution);
+}
+
+bool UMotionTransferComponent::GrantMotionState(const FMotionState& State)
+{
+    if (bTransactionInProgress
+        || bHasMotion
+        || !bCanProvideMotion
+        || !State.IsValid())
+    {
+        return false;
+    }
+
+    bTransactionInProgress = true;
+    SetStateWithoutNotification(State);
+
+    FMotionPendingNotification Notification;
+    Notification.NewOwner = this;
+    Notification.Result.bSucceeded = true;
+    Notification.Result.Verb = EMotionTransferVerb::Grant;
+    Notification.Result.StateSnapshot = State;
+    Notification.Result.ToParticipantId = ParticipantId;
+
+    bTransactionInProgress = false;
+    EnqueueNotification(MoveTemp(Notification));
+    return true;
+}
+
 FMotionTransferResult UMotionTransferComponent::TryMoveBetween(
     UMotionTransferComponent* SourceComponent,
     UMotionTransferComponent* TargetComponent,
     const EMotionTransferVerb Verb,
-    const bool bRequireProviderFlag)
+    const bool bRequireProviderFlag,
+    const FMotionState* StateOverride,
+    const FMotionDirectionResolution* Resolution)
 {
     if (bTransactionInProgress)
     {
@@ -259,8 +333,11 @@ FMotionTransferResult UMotionTransferComponent::TryMoveBetween(
         return NotifyRejectedRequest(Verb, EMotionTransferRejection::SourceEmpty);
     }
 
-    const FMotionState MovedState = SourceComponent->CurrentMotion;
-    const FMotionCompatibilityResult ReceiverResult = TargetComponent->CanReceiveState(MovedState);
+    const FMotionState MovedState = StateOverride
+        ? *StateOverride
+        : SourceComponent->CurrentMotion;
+    const FMotionCompatibilityResult ReceiverResult =
+        TargetComponent->CanReceiveState(MovedState, Resolution);
     if (!ReceiverResult.bAllowed)
     {
         return NotifyRejectedRequest(Verb, ReceiverResult.Rejection);

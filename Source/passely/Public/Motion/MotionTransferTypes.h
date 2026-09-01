@@ -26,7 +26,8 @@ enum class EMotionTransferVerb : uint8
     None,
     Capture,
     Transfer,
-    Reset
+    Reset,
+    Grant
 };
 
 UENUM(BlueprintType)
@@ -48,7 +49,20 @@ enum class EMotionTransferRejection : uint8
     TargetInvalidated,
     TransactionBusy,
     CooldownActive,
-    RequestsBlocked
+    RequestsBlocked,
+    TimingRejected
+};
+
+UENUM(BlueprintType)
+enum class EMotionCanonicalDirection : uint8
+{
+    None,
+    Forward,
+    Back,
+    Left,
+    Right,
+    Up,
+    Down
 };
 
 USTRUCT(BlueprintType)
@@ -69,6 +83,26 @@ struct PASSELY_API FMotionState
     FName SourceId = NAME_None;
 
     bool IsValid() const;
+};
+
+USTRUCT(BlueprintType)
+struct PASSELY_API FMotionDirectionResolution
+{
+    GENERATED_BODY()
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")
+    bool bValid = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")
+    EMotionCanonicalDirection CanonicalDirection = EMotionCanonicalDirection::None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")
+    FVector WorldDirection = FVector::ZeroVector;
+
+    static FMotionDirectionResolution Invalid();
+    static FMotionDirectionResolution Make(
+        EMotionCanonicalDirection InCanonicalDirection,
+        const FVector& InWorldDirection);
 };
 
 USTRUCT(BlueprintType)
@@ -102,6 +136,9 @@ struct PASSELY_API FMotionTransferContext
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")
     float Distance = 0.0f;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")
+    FMotionDirectionResolution DirectionResolution;
 };
 
 USTRUCT(BlueprintType)
@@ -153,4 +190,13 @@ struct PASSELY_API FMotionInteractionPreview
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")
     FGameplayTag MagnitudeTier;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")
+    EMotionCanonicalDirection CanonicalDirection = EMotionCanonicalDirection::None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")
+    FVector ProjectedWorldDirection = FVector::ZeroVector;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")
+    bool bHasProjectedDirection = false;
 };
