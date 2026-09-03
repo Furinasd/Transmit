@@ -1,6 +1,7 @@
 #include "Motion/MotionDirectionIndicatorComponent.h"
 
 #include "GameFramework/Actor.h"
+#include "Motion/MotionInteractorComponent.h"
 #include "Motion/MotionTransferComponent.h"
 
 UMotionDirectionIndicatorComponent::UMotionDirectionIndicatorComponent()
@@ -34,6 +35,9 @@ void UMotionDirectionIndicatorComponent::RefreshFromOwner()
     const UMotionTransferComponent* Motion = Owner
         ? Owner->FindComponentByClass<UMotionTransferComponent>()
         : nullptr;
+    const UMotionInteractorComponent* Interactor = Owner
+        ? Owner->FindComponentByClass<UMotionInteractorComponent>()
+        : nullptr;
 
     FMotionState State;
     const bool bHasMotion = Motion && Motion->TryGetMotionState(State);
@@ -41,7 +45,20 @@ void UMotionDirectionIndicatorComponent::RefreshFromOwner()
     SetHiddenInGame(false);
     if (bHasMotion)
     {
-        SetWorldRotation(State.Direction.Rotation());
-        SetArrowSize(FMath::Clamp(State.Magnitude / 300.0f, 1.5f, 4.0f));
+        FVector DisplayDirection = State.Direction.GetSafeNormal();
+        if (Interactor)
+        {
+            const FMotionInteractionPreview Preview = Interactor->GetCurrentPreview();
+            if (Preview.bHasProjectedDirection)
+            {
+                DisplayDirection = Preview.ProjectedWorldDirection.GetSafeNormal();
+            }
+        }
+
+        FVector GroundLocation = Owner->GetActorLocation();
+        GroundLocation.Z = Owner->GetComponentsBoundingBox(true).Min.Z + 8.0f;
+        SetWorldLocation(GroundLocation + DisplayDirection * 110.0f);
+        SetWorldRotation(DisplayDirection.Rotation());
+        SetArrowSize(FMath::Clamp(State.Magnitude / 600.0f, 1.0f, 2.0f));
     }
 }

@@ -33,6 +33,10 @@ Thumbs.db
 # Build/package output
 StagedBuilds/
 Packaged/
+# Platform resource templates copied from the Engine by UBT (not project-owned)
+Build/Mac/Resources/Info.Template.plist
+Build/Mac/Resources/Sandbox.NoNet.entitlements
+Build/Mac/Resources/Sandbox.Server.entitlements
 Build/*/FileOpenOrder/
 
 # Unreal per-user content

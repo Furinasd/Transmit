@@ -9,8 +9,8 @@
 #include "TransmitChargerActor.generated.h"
 
 class UArrowComponent;
+class UCapsuleComponent;
 class UPointLightComponent;
-class USceneComponent;
 class UStaticMeshComponent;
 class UMotionTransferComponent;
 
@@ -26,6 +26,9 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")
     TObjectPtr<UMotionTransferComponent> Motion;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Collision")
+    TObjectPtr<UCapsuleComponent> Collision;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Presentation")
     TObjectPtr<UStaticMeshComponent> Body;

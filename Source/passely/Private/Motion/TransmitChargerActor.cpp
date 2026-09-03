@@ -1,8 +1,8 @@
 #include "Motion/TransmitChargerActor.h"
 
 #include "Components/ArrowComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/PointLightComponent.h"
-#include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
@@ -15,11 +15,15 @@ ATransmitChargerActor::ATransmitChargerActor()
 {
     PrimaryActorTick.bCanEverTick = true;
 
-    USceneComponent* SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
-    SetRootComponent(SceneRoot);
+    Collision = CreateDefaultSubobject<UCapsuleComponent>(TEXT("Collision"));
+    Collision->InitCapsuleSize(70.0f, 70.0f);
+    Collision->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+    Collision->SetCanEverAffectNavigation(false);
+    SetRootComponent(Collision);
 
     Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Body"));
-    Body->SetupAttachment(SceneRoot);
+    Body->SetupAttachment(Collision);
+    Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     Body->SetRelativeScale3D(FVector(1.25f));
 
     static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(
@@ -30,7 +34,7 @@ ATransmitChargerActor::ATransmitChargerActor()
     }
 
     ThreatIndicator = CreateDefaultSubobject<UPointLightComponent>(TEXT("ThreatIndicator"));
-    ThreatIndicator->SetupAttachment(SceneRoot);
+    ThreatIndicator->SetupAttachment(Collision);
     ThreatIndicator->SetRelativeLocation(FVector(0.0f, 0.0f, 120.0f));
     ThreatIndicator->SetIntensity(6000.0f);
     ThreatIndicator->SetAttenuationRadius(400.0f);
@@ -38,7 +42,7 @@ ATransmitChargerActor::ATransmitChargerActor()
     ThreatIndicator->SetVisibility(false);
 
     DirectionIndicator = CreateDefaultSubobject<UArrowComponent>(TEXT("DirectionIndicator"));
-    DirectionIndicator->SetupAttachment(SceneRoot);
+    DirectionIndicator->SetupAttachment(Collision);
     DirectionIndicator->SetRelativeLocation(FVector(0.0f, 0.0f, 120.0f));
     DirectionIndicator->SetArrowColor(FColor::Red);
     DirectionIndicator->SetArrowSize(2.5f);
@@ -97,11 +101,17 @@ void ATransmitChargerActor::Tick(const float DeltaSeconds)
         FMotionState OwnedState;
         if (Motion->TryGetMotionState(OwnedState))
         {
+            FHitResult SweepHit;
             AddActorWorldOffset(
                 OwnedState.Direction.GetSafeNormal() * DashSpeed * DeltaSeconds,
-                false,
-                nullptr,
+                true,
+                &SweepHit,
                 ETeleportType::None);
+            if (SweepHit.bBlockingHit)
+            {
+                StateMachine->ForceRecovery();
+                bWasDashing = false;
+            }
         }
     }
     else
@@ -190,12 +200,12 @@ void ATransmitChargerActor::HandlePostRoomReset()
 
 void ATransmitChargerActor::BindRoomResetController()
 {
-    for (TActorIterator<AMotionRoomResetController> ResetIt(GetWorld()); ResetIt; ++ResetIt)
+    TActorIterator<AMotionRoomResetController> ResetIt(GetWorld());
+    if (ResetIt)
     {
         ResetIt->OnPostRoomReset.AddDynamic(
             this,
             &ATransmitChargerActor::HandlePostRoomReset);
-        break;
     }
 }
 

@@ -8,14 +8,14 @@
 
 | 项目 | 当前状态 |
 | --- | --- |
-| 引擎 | Unreal Engine 5.8（最近一次本地检查为 5.8.1） |
+| 当前本地工具链 | Unreal Engine 5.8（最近一次本地检查为 5.8.1；EngineAssociation 属于工作站本地差异，不是项目版本号） |
 | 当前阶段 | Part 1：v0.3 Core Logic Coverage（Gate A 验证中） |
 | 当前实现 | EXP-001 闭环 + v0.3 Canonical Direction Resolver / Preview=Commit / Charger Core |
 | 核心目标 | 在 `L_TestChamber` 完成 v0.3 PIE、micro cells 与 Charger 可玩验证 |
 | 版本管理 | Git + Git LFS |
 
 > [!IMPORTANT]
-> **EXP-001 Engineering Validated；v0.3 Core Implemented**：原始 `Source → Player → Receiver` 闭环与 20/20 Reset 已在 PIE 验证。v0.3 direction semantics 已提升到契约并完成 Core、8/8 自动化与 Blueprint 静态验证；新语义 PIE、micro cells、关卡内 Charger、human readability、打包与跨平台仍未验证。
+> **EXP-001 Engineering Validated；v0.3 Core Implemented**：原始 `Source → Player → Receiver` 闭环与 20/20 Reset 已在 PIE 验证。v0.3 direction semantics 已提升到契约；Gate A code support 已完成 macOS Editor 构建与 10/10 Motion 自动化。新语义 PIE、micro cells、关卡内 Charger、human readability、打包与完整跨平台验证仍未完成。
 
 ## 核心玩法
 
@@ -26,7 +26,7 @@
    ↓
 携带 Carry：玩家临时持有唯一一份 Motion State
    ↓
-转移 Transfer：将状态原样交给兼容的 Target
+转移 Transfer：将状态按 gameplay camera 解析出的 Canonical Direction 交给兼容 Target
    ↓
 转换 Convert：由明确的环境规则改变方向或运动类型
    ↓
@@ -90,7 +90,7 @@ C++ 负责状态不变量、事务、兼容性判断、重置契约和可测试�
 ```text
 Source_Linear_001（持有 +X / 600 的 Linear Motion）
         ↓ 按 E 捕获（Capture）
-Player（携带唯一 Motion State，指示灯 + 方向箭头反馈）
+Player（携带唯一 Motion State，指示灯 + 地面方向 Preview）
         ↓ 按 Q 转移（Transfer）
 Receiver_Linear_001（校验方向后消费 Consume）
         ↓ 按 R 房间重置（Reset）
@@ -127,7 +127,7 @@ git lfs pull
 /Game/ThirdPerson/Lvl_ThirdPerson
 ```
 
-`.uproject` 当前使用 GUID 关联本机引擎；在其他工作站首次打开时，可能需要重新选择 Unreal Engine 5.8。
+`.uproject` 当前使用 `5.8` 版本关联而不是某台工作站的引擎 GUID；其他工作站仍需安装或选择兼容的 Unreal Engine 5.8。
 
 ## 验证状态
 
@@ -139,8 +139,8 @@ git lfs pull
 | EXP-001 可玩闭环（PIE） | 已通过 | Capture / Transfer / Consume 成功，E/Q/R 可用 |
 | 20/20 Room Reset | 已通过 | PIE 自动化 R 键 + 状态校验（`Saved/Logs/passely.log`，2026-08-30） |
 | human readability / 首次玩家理解 | 未验证 | 尚未执行首次玩家盲测（Sep 1 门禁） |
-| v0.3 Core 自动化 | 8/8 通过 | Resolver / Preview=Commit / Charger FSM 等；尚未替代 PIE 验收 |
-| Build / Packaging / 跨平台 | 部分验证 | Win64 Editor Development 已构建；打包与 macOS 未验证 |
+| v0.3 / Gate A Core 自动化 | 10/10 通过 | Resolver / Preview=Commit / Charger FSM、Actor-path Capture 与结构门禁等；尚未替代 PIE 验收 |
+| Build / Packaging / 跨平台 | 部分验证 | Win64 Editor Development 与 macOS Editor module 已构建；打包和最终 Win64 release authority 尚未验证 |
 
 ## 开发路线
 

@@ -237,7 +237,7 @@ UMotionTransferComponent* UMotionInteractorComponent::ResolvePlayerMotionCompone
 
     if (Owner->GetClass()->ImplementsInterface(UMotionTransferable::StaticClass()))
     {
-        return IMotionTransferable::Execute_GetMotionTransferComponent(Owner);
+        return IMotionTransferable::CallGetMotionTransferComponent(Owner);
     }
 
     return nullptr;
@@ -315,7 +315,7 @@ UMotionInteractorComponent::FCandidateEvaluation UMotionInteractorComponent::Eva
     Evaluation.Context.Requester = GetOwner();
 
     UMotionTransferComponent* TargetMotion =
-        IMotionTransferable::Execute_GetMotionTransferComponent(Candidate);
+        IMotionTransferable::CallGetMotionTransferComponent(Candidate);
     if (!TargetMotion)
     {
         Evaluation.Compatibility = FMotionCompatibilityResult::Reject(
@@ -382,7 +382,7 @@ UMotionInteractorComponent::FCandidateEvaluation UMotionInteractorComponent::Eva
         {
             ResolvedState.Direction = Resolution.WorldDirection.GetSafeNormal();
         }
-        Evaluation.Compatibility = IMotionTransferable::Execute_CanReceiveMotion(
+        Evaluation.Compatibility = IMotionTransferable::CallCanReceiveMotion(
             Candidate,
             ResolvedState,
             Evaluation.Context);
@@ -390,7 +390,7 @@ UMotionInteractorComponent::FCandidateEvaluation UMotionInteractorComponent::Eva
     }
     else
     {
-        Evaluation.Compatibility = IMotionTransferable::Execute_CanCaptureMotion(
+        Evaluation.Compatibility = IMotionTransferable::CallCanCaptureMotion(
             Candidate,
             Evaluation.Context);
         Evaluation.MagnitudeTier = TargetMotion->GetMagnitudeTier();

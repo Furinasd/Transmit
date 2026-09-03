@@ -76,7 +76,7 @@ Motion State is gameplay-authored motion, not a promise of strict mass, friction
 | Interaction | Promoted rule | First level |
 | --- | --- | --- |
 | Moving Source / Prop → Player | Capture removes its Linear state; the Source stops and Player carries the same direction and magnitude. | L1 |
-| Player → Transfer Crate / Carrier | A valid Transfer applies the carried Linear state without aim-based redirection. | L1 |
+| Player → Transfer Crate / Carrier | A valid Transfer preserves ownership and magnitude while applying the gameplay-camera canonical reroute; arbitrary aim vectors never author direction. | L1 |
 | Player → matching Linear Receiver | Receiver accepts only the canonical direction resolved by the gameplay camera (plus compatible magnitude) and consumes it into a function. | L1–L2 |
 | Moving Carrier → Redirect Rail | **Superseded for P0:** v0.3 uses camera-driven canonical reroute at Transfer; rail geometry may return as a deterministic environment converter. | L2 candidate |
 | Charging Charger → Player | Capture is legal only during the committed dash window; success stops/staggers the Charger and yields its high-magnitude Linear state. | L3 |
@@ -114,7 +114,7 @@ All five levels are currently **Paper**, not playable evidence.
 
 | Level | Priority | Duration | Learning objective | Required proof |
 | --- | --- | ---: | --- | --- |
-| L1 — Capture & Transfer | P0 | 1.5 min | Motion can be taken from A and given unchanged to B. | Moving Source → Player → Crate → Gate. |
+| L1 — Capture & Transfer | P0 | 1.5 min | Motion can be taken from A and given to B without copying or losing ownership; Transfer may apply the canonical camera reroute. | Moving Source → Player → Crate → Gate. |
 | L2 — Direction Matters | P0 | 2.0 min | Direction belongs to Motion State and changes only through the deterministic camera-driven resolver. | Camera-relative Right Linear → Transfer reroute → Up Linear → Lift (final proof locked in Part 2 brief). |
 | L3 — Enemy as Source | P0 | 2.5 min | A Charger dash is both threat and high-magnitude resource. | Capture Dash → Stop Charger → Transfer to environment outcome; direct enemy Target remains open. |
 | L4 — Motion Conversion | P1 | 2.5 min | A deterministic mechanism can change motion type. | Right Linear → Crank → Clockwise Angular → Mechanism. |
