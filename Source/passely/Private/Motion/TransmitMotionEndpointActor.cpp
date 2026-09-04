@@ -75,9 +75,11 @@ void ATransmitMotionEndpointActor::Tick(const float DeltaSeconds)
 
     FMotionState State;
     const bool bHasMotion = Motion->TryGetMotionState(State);
-    if (!bHasMotion || !bAnimateOwnedMotion)
+    const bool bHasDirectionToLoop = bHasMotion || bConsumedSinceReset;
+    if (!bHasDirectionToLoop || !bAnimateOwnedMotion)
     {
-        bHadMotionLastFrame = bHasMotion;
+        bHadMotionLastFrame = false;
+        MotionPreviewDistanceTravelled = 0.0f;
         return;
     }
 
@@ -87,13 +89,22 @@ void ATransmitMotionEndpointActor::Tick(const float DeltaSeconds)
     }
     bHadMotionLastFrame = true;
 
-    const float PreviewSpeed = State.Magnitude * MotionPreviewSpeedScale;
+    const float LoopMagnitude = bHasMotion ? State.Magnitude : ConsumedLoopMagnitude;
+    const float PreviewSpeed = FMath::Max(0.0f, LoopMagnitude) * MotionPreviewSpeedScale;
     MotionPreviewDistanceTravelled = FMath::Fmod(
         MotionPreviewDistanceTravelled + PreviewSpeed * DeltaSeconds,
         FMath::Max(1.0f, MotionPreviewDistance));
 
+    const FVector LoopWorldDirection = bHasMotion
+        ? State.Direction.GetSafeNormal()
+        : ConsumedLoopDirection.GetSafeNormal();
+    if (LoopWorldDirection.IsNearlyZero())
+    {
+        return;
+    }
+
     const FVector LocalDirection = GetActorTransform()
-        .InverseTransformVectorNoScale(State.Direction)
+        .InverseTransformVectorNoScale(LoopWorldDirection)
         .GetSafeNormal();
     Body->SetRelativeLocation(
         InitialBodyRelativeLocation + LocalDirection * MotionPreviewDistanceTravelled);
@@ -113,12 +124,20 @@ void ATransmitMotionEndpointActor::HandleMotionConsumed(
     const FMotionTransferResult& Result)
 {
     bConsumedSinceReset = Result.bSucceeded && Result.bConsumed;
+    ConsumedLoopDirection = bConsumedSinceReset
+        ? Result.StateSnapshot.Direction.GetSafeNormal()
+        : FVector::ZeroVector;
+    ConsumedLoopMagnitude = bConsumedSinceReset
+        ? Result.StateSnapshot.Magnitude
+        : 0.0f;
     RefreshPresentation();
 }
 
 void ATransmitMotionEndpointActor::HandlePostRoomReset()
 {
     bConsumedSinceReset = false;
+    ConsumedLoopDirection = FVector::ZeroVector;
+    ConsumedLoopMagnitude = 0.0f;
     bHadMotionLastFrame = false;
     MotionPreviewDistanceTravelled = 0.0f;
     Body->SetRelativeLocation(InitialBodyRelativeLocation);

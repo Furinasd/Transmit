@@ -58,6 +58,8 @@ private:
     float MotionPreviewDistanceTravelled = 0.0f;
     FVector InitialBodyRelativeLocation = FVector::ZeroVector;
     FVector InitialBodyRelativeScale = FVector::OneVector;
+    FVector ConsumedLoopDirection = FVector::ZeroVector;
+    float ConsumedLoopMagnitude = 0.0f;
 
     UFUNCTION()
     void HandleMotionStateChanged(const FMotionTransferResult& Result);

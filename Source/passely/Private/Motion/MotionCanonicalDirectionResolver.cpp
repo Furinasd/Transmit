@@ -48,22 +48,30 @@ FMotionDirectionResolution UMotionCanonicalDirectionResolver::ResolveDirectionDe
     }
 
     const FVector WorldUp = FVector::UpVector;
-    const float VerticalDot = FVector::DotProduct(Input, WorldUp);
-    const float VerticalPitchDegrees = FMath::RadiansToDegrees(
-        FMath::Asin(FMath::Clamp(VerticalDot, -1.0f, 1.0f)));
+
+    // Up/Down is a camera-pitch decision: the player selects the output
+    // canonical direction by looking up or down, independent of whether the
+    // carried state already points vertically. The carried input's own
+    // vertical angle is retained as a secondary source so vertical Sources
+    // remain resolvable with a level camera.
+    const float InputPitchDegrees = FMath::RadiansToDegrees(
+        FMath::Asin(FMath::Clamp(FVector::DotProduct(Input, WorldUp), -1.0f, 1.0f)));
+    const float CameraPitchDegrees = CameraRotation.Pitch;
+    const float UpPitchScore = FMath::Max(InputPitchDegrees, CameraPitchDegrees);
+    const float DownPitchScore = FMath::Max(-InputPitchDegrees, -CameraPitchDegrees);
 
     const float UpEnter = FMath::Clamp(InUpEnterPitchDegrees, 1.0f, 89.0f);
     const float UpExit = FMath::Clamp(InUpExitPitchDegrees, 0.0f, UpEnter);
 
     if (PreviousDirection == EMotionCanonicalDirection::Up)
     {
-        if (VerticalPitchDegrees >= UpExit)
+        if (UpPitchScore >= UpExit)
         {
             return FMotionDirectionResolution::Make(
                 EMotionCanonicalDirection::Up,
                 bInUseWorldUpForUpDown ? WorldUp : CameraRotation.RotateVector(FVector::UpVector));
         }
-        if (VerticalPitchDegrees <= -UpEnter)
+        if (DownPitchScore >= UpEnter)
         {
             return FMotionDirectionResolution::Make(
                 EMotionCanonicalDirection::Down,
@@ -72,13 +80,13 @@ FMotionDirectionResolution UMotionCanonicalDirectionResolver::ResolveDirectionDe
     }
     else if (PreviousDirection == EMotionCanonicalDirection::Down)
     {
-        if (VerticalPitchDegrees <= -UpExit)
+        if (DownPitchScore >= UpExit)
         {
             return FMotionDirectionResolution::Make(
                 EMotionCanonicalDirection::Down,
                 bInUseWorldUpForUpDown ? -WorldUp : -CameraRotation.RotateVector(FVector::UpVector));
         }
-        if (VerticalPitchDegrees >= UpEnter)
+        if (UpPitchScore >= UpEnter)
         {
             return FMotionDirectionResolution::Make(
                 EMotionCanonicalDirection::Up,
@@ -87,13 +95,13 @@ FMotionDirectionResolution UMotionCanonicalDirectionResolver::ResolveDirectionDe
     }
     else
     {
-        if (VerticalPitchDegrees >= UpEnter)
+        if (UpPitchScore >= UpEnter)
         {
             return FMotionDirectionResolution::Make(
                 EMotionCanonicalDirection::Up,
                 bInUseWorldUpForUpDown ? WorldUp : CameraRotation.RotateVector(FVector::UpVector));
         }
-        if (VerticalPitchDegrees <= -UpEnter)
+        if (DownPitchScore >= UpEnter)
         {
             return FMotionDirectionResolution::Make(
                 EMotionCanonicalDirection::Down,

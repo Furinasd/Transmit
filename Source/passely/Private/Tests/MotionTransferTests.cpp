@@ -347,6 +347,20 @@ bool FMotionCanonicalResolverTest::RunTest(const FString& Parameters)
         TEXT("Camera yaw keeps world direction +X"),
         Yawed.WorldDirection.Equals(FVector::ForwardVector, 1e-3f));
 
+    // Camera pitch is the player's Up/Down selection: a horizontal carried
+    // direction becomes Up when the camera looks up by the enter threshold.
+    Resolver->ResetHysteresis();
+    const FRotator CameraPitchUp(50.0f, 0.0f, 0.0f);
+    const FMotionDirectionResolution UpByCamera =
+        Resolver->ResolveDirection(FVector::ForwardVector, CameraPitchUp);
+    TestTrue(
+        TEXT("Camera pitch resolves a horizontal carried state to Up"),
+        UpByCamera.bValid
+            && UpByCamera.CanonicalDirection == EMotionCanonicalDirection::Up);
+    TestTrue(
+        TEXT("Camera pitch Up keeps world direction +Z"),
+        UpByCamera.WorldDirection.Equals(FVector::UpVector, 1e-3f));
+
     // Identical pose and input must resolve identically.
     Resolver->ResetHysteresis();
     const FMotionDirectionResolution DeterministicA =
@@ -500,6 +514,41 @@ bool FMotionResolvedTransferTest::RunTest(const FString& Parameters)
         MismatchTransfer.Rejection == EMotionTransferRejection::IncompatibleDirection);
     TestTrue(TEXT("Player keeps motion after mismatch"), Player->HasMotionState());
     TestFalse(TEXT("Up receiver stays empty after mismatch"), ReceiverUp->HasMotionState());
+
+    // Camera-selected Up against a Forward receiver is a DirectionMismatch:
+    // preview and commit reject identically and the Player keeps Motion.
+    Resolver->ResetHysteresis();
+    const FRotator CameraPitchUp(50.0f, 0.0f, 0.0f);
+    const FMotionDirectionResolution CameraUpResolution =
+        Resolver->ResolveDirection(FVector::ForwardVector, CameraPitchUp);
+    TestTrue(
+        TEXT("Camera Up resolution is valid"),
+        CameraUpResolution.bValid
+            && CameraUpResolution.CanonicalDirection == EMotionCanonicalDirection::Up);
+
+    Player->TryGetMotionState(Carried);
+    ResolvedState = Carried;
+    ResolvedState.Direction = CameraUpResolution.WorldDirection;
+    const FMotionCompatibilityResult ForwardMismatchPreview =
+        ReceiverForward->CanReceiveState(ResolvedState, &CameraUpResolution);
+    TestFalse(
+        TEXT("Forward receiver preview rejects camera-selected Up"),
+        ForwardMismatchPreview.bAllowed);
+    TestTrue(
+        TEXT("Forward receiver reports IncompatibleDirection for camera Up"),
+        ForwardMismatchPreview.Rejection
+            == EMotionTransferRejection::IncompatibleDirection);
+    const FMotionTransferResult ForwardMismatchTransfer =
+        Player->TryTransferToComponent(ReceiverForward, CameraUpResolution);
+    TestFalse(
+        TEXT("Camera Up transfer to Forward receiver fails"),
+        ForwardMismatchTransfer.bSucceeded);
+    TestTrue(
+        TEXT("Player keeps motion after camera Up mismatch"),
+        Player->HasMotionState());
+    TestFalse(
+        TEXT("Forward receiver stays empty after camera Up mismatch"),
+        ReceiverForward->HasMotionState());
 
     ReleaseComponent(Source);
     ReleaseComponent(Player);
