@@ -1,6 +1,6 @@
 # Transmit Architecture
 
-> Status: EXP-001 engineering validated; v0.3 camera-driven six-direction reroute is promoted (ADR-003) and under implementation on `feat/gameplay-core-v03`. Sections still marked "Proposed" are target design.
+> Status: EXP-001 engineering validated; the v0.3 camera-driven six-direction core and Gate A code support are implemented and automated-verified on `feat/gameplay-core-v03`. Micro-cell asset validation, PIE, and human acceptance remain open. Sections still marked "Proposed" are target design.
 
 ## Scope
 
@@ -95,6 +95,8 @@ This technical ownership model is recorded in `Decisions/ADR-001-transfer-state.
 ## Proposed Interfaces
 
 `IMotionTransferable` marks an actor as participating in Motion ownership. Player, Moving Source, Transfer Crate, Receiver, and Charger use the same interface rather than pair-specific casts.
+
+Native callers use `IMotionTransferable::Call*` helpers for Actor-level interface dispatch. They call a class-level UFunction when a Blueprint owns the event and otherwise use the native interface vtable, so native-only C++ `_Implementation` overrides remain reachable without bypassing Blueprint overrides.
 
 The initial C++ surface should remain small:
 
@@ -232,9 +234,10 @@ Core Motion Transfer code must not depend on a specific Player, Enemy, Environme
 
 ## Current Implementation Boundary
 
-As of 2026-09-01, Part 1 (Core Logic Coverage) is in progress on `feat/gameplay-core-v03`:
+As of 2026-09-03, Part 1 code support is complete and Gate A playable validation remains in progress on `feat/gameplay-core-v03`:
 
 - New v0.3 core: `UMotionCanonicalDirectionResolver` (six canonical directions, pitch + sector hysteresis, deterministic), `FMotionDirectionResolution` carried inside `FMotionTransferContext`, `EMotionCanonicalDirection` Receiver requirements, `ATransmitChargerActor` + `UMotionChargerStateMachine` (Telegraph → Dash → Recovery with a capture window), `EMotionTransferRejection::TimingRejected`, and `UMotionTransferComponent::GrantMotionState`.
 - Preview = Commit: the interactor resolves the carried direction once per frame and passes the same resolution into `TryTransferToActor`; the committed Transfer moves the resolved state (`Direction = ProjectedWorldDirection`), and receivers evaluate `RequiredCanonicalDirection` against that same resolution.
-- Static validation: `passelyEditor` builds; 8/8 `Transmit.MotionTransfer` automation tests pass (resolver determinism/hysteresis, resolved transfer + `IncompatibleDirection` preserves ownership, Charger capture window, 20-cycle Reset, rejection, notification reentrancy, magnitude policy, sticky scoring); Blueprint stage and `EXP001_VALIDATE SUCCESS` (5 Blueprints compile, Receiver requires Canonical Forward, Map Check clean).
-- Still unverified: PIE under the new reroute semantics, micro test cells, a level-placed Charger, first-player comprehension, packaging, and cross-platform.
+- Actor dispatch and Charger movement: `IMotionTransferable::Call*` preserves Blueprint event dispatch while making native-only C++ implementations reachable; Charger uses a collision-enabled capsule root, presentation-only Body collision, swept dash movement, and blocking-hit Recovery.
+- Automated validation: the normal warning-clean macOS `passelyEditor` build succeeds; 10/10 `Transmit.MotionTransfer` tests pass, including native Actor-path Charger Capture and Charger structure/capture-gate coverage. Earlier Blueprint validation reported `EXP001_VALIDATE SUCCESS`, but the current dirty `L_TestChamber` still requires a fresh Blueprint compile and Map Check after human inspection.
+- Still unverified: PIE under the new reroute semantics, L1-L3 micro test cells, a level-placed Charger, first-player comprehension, packaging, and full cross-platform release behavior.

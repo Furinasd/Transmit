@@ -171,14 +171,14 @@ FMotionTransferResult UMotionTransferComponent::TryCaptureFromActor(
     }
 
     const FMotionCompatibilityResult Compatibility =
-        IMotionTransferable::Execute_CanCaptureMotion(SourceActor, Context);
+        IMotionTransferable::CallCanCaptureMotion(SourceActor, Context);
     if (!Compatibility.bAllowed)
     {
         return NotifyRejectedRequest(EMotionTransferVerb::Capture, Compatibility.Rejection);
     }
 
     UMotionTransferComponent* SourceComponent =
-        IMotionTransferable::Execute_GetMotionTransferComponent(SourceActor);
+        IMotionTransferable::CallGetMotionTransferComponent(SourceActor);
     return TryMoveBetween(SourceComponent, this, EMotionTransferVerb::Capture, true);
 }
 
@@ -214,14 +214,14 @@ FMotionTransferResult UMotionTransferComponent::TryTransferToActor(
     }
 
     const FMotionCompatibilityResult Compatibility =
-        IMotionTransferable::Execute_CanReceiveMotion(TargetActor, ResolvedState, Context);
+        IMotionTransferable::CallCanReceiveMotion(TargetActor, ResolvedState, Context);
     if (!Compatibility.bAllowed)
     {
         return NotifyRejectedRequest(EMotionTransferVerb::Transfer, Compatibility.Rejection);
     }
 
     UMotionTransferComponent* TargetComponent =
-        IMotionTransferable::Execute_GetMotionTransferComponent(TargetActor);
+        IMotionTransferable::CallGetMotionTransferComponent(TargetActor);
     return TryMoveBetween(
         this,
         TargetComponent,

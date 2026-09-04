@@ -2,12 +2,16 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Components/CapsuleComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Motion/TransmitChargerActor.h"
 #include "Motion/MotionCanonicalDirectionResolver.h"
 #include "Motion/MotionChargerStateMachine.h"
 #include "Motion/MotionGameplayTags.h"
 #include "Motion/MotionInteractorComponent.h"
 #include "Motion/MotionTransferComponent.h"
 #include "Motion/MotionTransferSettings.h"
+#include "Motion/MotionTransferable.h"
 
 namespace MotionTransferTests
 {
@@ -587,6 +591,185 @@ bool FMotionChargerStateMachineTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("Reset closes the capture window"), Machine->IsCaptureWindowOpen());
 
     Machine->RemoveFromRoot();
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMotionChargerActorStructuralTest,
+    "Transmit.MotionTransfer.ChargerActorStructure",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMotionChargerActorStructuralTest::RunTest(const FString& Parameters)
+{
+    const ATransmitChargerActor* DefaultCharger = GetDefault<ATransmitChargerActor>();
+    TestNotNull(TEXT("Charger default actor exists"), DefaultCharger);
+    if (!DefaultCharger)
+    {
+        return false;
+    }
+
+    const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(DefaultCharger->GetRootComponent());
+    TestNotNull(TEXT("Charger root collision is a capsule"), Capsule);
+    if (Capsule)
+    {
+        TestTrue(
+            TEXT("Charger root collision remains enabled"),
+            Capsule->GetCollisionEnabled() != ECollisionEnabled::NoCollision);
+        TestEqual(
+            TEXT("Charger root uses BlockAllDynamic"),
+            Capsule->GetCollisionProfileName(),
+            TEXT("BlockAllDynamic"));
+        TestTrue(
+            TEXT("Charger capsule has the authored half-height"),
+            FMath::IsNearlyEqual(Capsule->GetScaledCapsuleHalfHeight(), 70.0f, 1.0f));
+    }
+
+    TestNotNull(TEXT("Charger Body presentation exists"), DefaultCharger->Body.Get());
+    if (DefaultCharger->Body)
+    {
+        TestEqual(
+            TEXT("Charger Body presentation does not compete with root collision"),
+            DefaultCharger->Body->GetCollisionEnabled(),
+            ECollisionEnabled::NoCollision);
+    }
+
+    TestNotNull(TEXT("Charger Motion component exists"), DefaultCharger->Motion.Get());
+    if (DefaultCharger->Motion)
+    {
+        TestEqual(
+            TEXT("Charger has a stable participant id"),
+            DefaultCharger->Motion->GetParticipantId(),
+            TEXT("Charger"));
+        TestTrue(
+            TEXT("Charger can provide captured dash Motion"),
+            DefaultCharger->Motion->bCanProvideMotion);
+        TestFalse(
+            TEXT("Charger never stores a transferred Player state"),
+            DefaultCharger->Motion->bCanReceiveMotion);
+    }
+
+    TestNotNull(
+        TEXT("Charger owns a state machine instance"),
+        DefaultCharger->StateMachine.Get());
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMotionChargerActorCaptureGateTest,
+    "Transmit.MotionTransfer.ChargerActorCaptureGate",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMotionChargerActorCaptureGateTest::RunTest(const FString& Parameters)
+{
+    using namespace MotionTransferTests;
+
+    ATransmitChargerActor* Charger = NewObject<ATransmitChargerActor>(GetTransientPackage());
+    Charger->AddToRoot();
+    UMotionChargerStateMachine* Machine = Charger->StateMachine;
+    UMotionTransferComponent* ChargerMotion = Charger->Motion;
+    TestNotNull(TEXT("Charger instance has a state machine"), Machine);
+    TestNotNull(TEXT("Charger instance has a Motion component"), ChargerMotion);
+    if (!Machine || !ChargerMotion)
+    {
+        Charger->RemoveFromRoot();
+        return false;
+    }
+
+    Machine->IdleDurationSeconds = 0.1f;
+    Machine->TelegraphDurationSeconds = 0.1f;
+    Machine->DashDurationSeconds = 1.0f;
+    Machine->RecoveryDurationSeconds = 1.0f;
+    Machine->DashCommitWindowDelaySeconds = 0.05f;
+
+    FMotionState DashState = MakeState(TEXT("Charger.Dash.001"), 1200.0f);
+    DashState.Direction = FVector::ForwardVector;
+    TestTrue(
+        TEXT("Charger starts the Dash window with high-magnitude Motion"),
+        ChargerMotion->GrantMotionState(DashState));
+
+    FMotionTransferContext Context;
+    Machine->Start();
+    FMotionCompatibilityResult GateResult =
+        Charger->CanCaptureMotion_Implementation(Context);
+    TestFalse(TEXT("Idle rejects Charger Capture"), GateResult.bAllowed);
+    TestEqual(
+        TEXT("Idle rejection is TimingRejected"),
+        GateResult.Rejection,
+        EMotionTransferRejection::TimingRejected);
+
+    Machine->Tick(0.2f);
+    GateResult = Charger->CanCaptureMotion_Implementation(Context);
+    TestFalse(TEXT("Telegraph rejects Charger Capture"), GateResult.bAllowed);
+    TestEqual(
+        TEXT("Telegraph rejection is TimingRejected"),
+        GateResult.Rejection,
+        EMotionTransferRejection::TimingRejected);
+
+    Machine->Tick(0.2f);
+    TestFalse(
+        TEXT("Capture is not open before the Dash commit delay"),
+        Machine->IsCaptureWindowOpen());
+    Machine->Tick(0.1f);
+    TestTrue(TEXT("Dash commit delay opens the Capture window"), Machine->IsCaptureWindowOpen());
+
+    GateResult = Charger->CanCaptureMotion_Implementation(Context);
+    TestTrue(TEXT("Open Dash window accepts Charger Capture"), GateResult.bAllowed);
+    TestTrue(
+        TEXT("Charger class advertises MotionTransferable for Actor targeting"),
+        Charger->GetClass()->ImplementsInterface(UMotionTransferable::StaticClass()));
+    TestNotNull(
+        TEXT("Charger exposes a native MotionTransferable address"),
+        Charger->GetNativeInterfaceAddress(UMotionTransferable::StaticClass()));
+    const FMotionCompatibilityResult ActorInterfaceGate =
+        IMotionTransferable::CallCanCaptureMotion(Charger, Context);
+    TestTrue(
+        TEXT("Actor-interface helper agrees with the direct Charger gate"),
+        ActorInterfaceGate.bAllowed);
+    TestEqual(
+        TEXT("Actor-interface helper returns the same open-window result"),
+        ActorInterfaceGate.Rejection,
+        EMotionTransferRejection::None);
+    UMotionTransferComponent* HelperMotion =
+        IMotionTransferable::CallGetMotionTransferComponent(Charger);
+    TestSamePtr(
+        TEXT("Actor-interface helper resolves the Charger Motion component"),
+        HelperMotion,
+        ChargerMotion);
+
+    UMotionTransferComponent* Player = MakeComponent(
+        TEXT("Player"), false, true, EMotionEndpointMode::Store);
+    const FMotionTransferResult Capture =
+        Player->TryCaptureFromActor(Charger, Context);
+    TestTrue(TEXT("Actor-path Capture succeeds during the open Dash window"), Capture.bSucceeded);
+    TestFalse(TEXT("Charger Motion is removed after Capture"), ChargerMotion->HasMotionState());
+
+    FMotionState CapturedState;
+    TestTrue(TEXT("Player owns Motion after Charger Capture"), Player->TryGetMotionState(CapturedState));
+    TestTrue(
+        TEXT("Captured Charger Motion preserves direction"),
+        CapturedState.Direction.Equals(FVector::ForwardVector, 1e-3f));
+    TestTrue(
+        TEXT("Captured Charger Motion preserves high magnitude"),
+        FMath::IsNearlyEqual(CapturedState.Magnitude, 1200.0f, 1e-3f));
+    TestEqual(
+        TEXT("Captured Charger Motion keeps its Source identity"),
+        CapturedState.SourceId,
+        TEXT("Charger.Dash.001"));
+
+    Machine->ForceRecovery();
+    TestTrue(TEXT("Capture stops the Dash window"), !Machine->IsCaptureWindowOpen());
+    TestTrue(
+        TEXT("Charger can be re-seeded after the capture stops the dash"),
+        ChargerMotion->GrantMotionState(DashState));
+    GateResult = Charger->CanCaptureMotion_Implementation(Context);
+    TestFalse(TEXT("Recovery rejects Charger Capture"), GateResult.bAllowed);
+    TestEqual(
+        TEXT("Recovery rejection is TimingRejected"),
+        GateResult.Rejection,
+        EMotionTransferRejection::TimingRejected);
+
+    ReleaseComponent(Player);
+    Charger->RemoveFromRoot();
     return true;
 }
 

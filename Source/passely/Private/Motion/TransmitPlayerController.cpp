@@ -95,9 +95,9 @@ void ATransmitPlayerController::HandleTransfer()
 
 void ATransmitPlayerController::HandleReset()
 {
-    for (TActorIterator<AMotionRoomResetController> ResetIt(GetWorld()); ResetIt; ++ResetIt)
+    TActorIterator<AMotionRoomResetController> ResetIt(GetWorld());
+    if (ResetIt)
     {
         ResetIt->RequestRoomReset();
-        break;
     }
 }

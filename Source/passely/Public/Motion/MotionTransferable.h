@@ -35,4 +35,24 @@ public:
     virtual FMotionCompatibilityResult CanReceiveMotion_Implementation(
         const FMotionState& State,
         const FMotionTransferContext& Context) const;
+
+    // Call interface events from native code.
+    //
+    // The generated Execute_* helpers dispatch through UFunction even when the
+    // only implementation is a native C++ _Implementation override with no
+    // class-level UFunction. That path leaves the return value untouched for
+    // C++-only interface implementers, so these helpers prefer the native
+    // interface vtable unless a class (usually a Blueprint) actually owns the
+    // event function.
+    static UMotionTransferComponent* CallGetMotionTransferComponent(
+        const UObject* Object);
+
+    static FMotionCompatibilityResult CallCanCaptureMotion(
+        const UObject* Object,
+        const FMotionTransferContext& Context);
+
+    static FMotionCompatibilityResult CallCanReceiveMotion(
+        const UObject* Object,
+        const FMotionState& State,
+        const FMotionTransferContext& Context);
 };

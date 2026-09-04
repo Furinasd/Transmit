@@ -127,12 +127,12 @@ void ATransmitMotionEndpointActor::HandlePostRoomReset()
 
 void ATransmitMotionEndpointActor::BindRoomResetController()
 {
-    for (TActorIterator<AMotionRoomResetController> ResetIt(GetWorld()); ResetIt; ++ResetIt)
+    TActorIterator<AMotionRoomResetController> ResetIt(GetWorld());
+    if (ResetIt)
     {
         ResetIt->OnPostRoomReset.AddDynamic(
             this,
             &ATransmitMotionEndpointActor::HandlePostRoomReset);
-        break;
     }
 }
 
