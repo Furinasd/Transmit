@@ -8,11 +8,11 @@
 
 #include "TransmitChargerActor.generated.h"
 
-class UArrowComponent;
 class UCapsuleComponent;
 class UPointLightComponent;
 class UStaticMeshComponent;
 class UMotionTransferComponent;
+class UMotionDirectionIndicatorComponent;
 
 UCLASS(BlueprintType, Blueprintable)
 class PASSELY_API ATransmitChargerActor : public AActor, public IMotionTransferable
@@ -37,7 +37,7 @@ public:
     TObjectPtr<UPointLightComponent> ThreatIndicator;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Presentation")
-    TObjectPtr<UArrowComponent> DirectionIndicator;
+    TObjectPtr<UMotionDirectionIndicatorComponent> DirectionIndicator;
 
     UPROPERTY(Instanced, EditAnywhere, BlueprintReadOnly, Category = "Motion|Charger")
     TObjectPtr<UMotionChargerStateMachine> StateMachine;

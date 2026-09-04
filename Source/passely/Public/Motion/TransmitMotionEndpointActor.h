@@ -6,11 +6,11 @@
 
 #include "TransmitMotionEndpointActor.generated.h"
 
-class UArrowComponent;
 class UMotionTransferComponent;
 class UPointLightComponent;
 class USceneComponent;
 class UStaticMeshComponent;
+class UMotionDirectionIndicatorComponent;
 
 UCLASS(BlueprintType, Blueprintable)
 class PASSELY_API ATransmitMotionEndpointActor : public AActor, public IMotionTransferable
@@ -32,7 +32,7 @@ public:
     TObjectPtr<UPointLightComponent> MotionIndicator;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Presentation")
-    TObjectPtr<UArrowComponent> DirectionIndicator;
+    TObjectPtr<UMotionDirectionIndicatorComponent> DirectionIndicator;
 
 protected:
     virtual void BeginPlay() override;

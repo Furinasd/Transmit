@@ -11,7 +11,7 @@
 
 ATransmitPlayerController::ATransmitPlayerController()
 {
-    bShowMouseCursor = false;
+    bShowMouseCursor = true;
 }
 
 void ATransmitPlayerController::BeginPlay()
