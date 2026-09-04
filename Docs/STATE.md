@@ -2,16 +2,16 @@
 
 > Rebuildable and non-authoritative. Durable product rules belong in `DESIGN_CONTRACT.md`; durable technical decisions belong in `ARCHITECTURE.md`, ADRs, and Git history.
 
-Last inspected: 2026-09-04 (post-rollback planning)
+Last inspected: 2026-09-04 (branch cleanup complete)
 
 ## Status
 
-- **Part 1 (Core Logic Coverage) code support complete; Gate A remains open**：v0.3 contract promotion 与 Target / Direction / Preview / Charger Core 已完成代码及自动化验证；当前分支 `feat/gameplay-core-v03-local`。Gate A 尚待当前地图二进制事务复核、L3 micro cell、fresh Editor build、PIE 与人工验收。
+- **Part 1 (Core Logic Coverage) code support complete; Gate A remains open**：v0.3 contract promotion 与 Target / Direction / Preview / Charger Core 已完成代码及自动化验证；当前开发分支为 `feat/gameplay-core-v03`，已与 `origin/feat/gameplay-core-v03` 同步（HEAD `d330aae`）。关卡设计工具分支 `BP_LD_BeatMarker` 已推送到 `origin`（`da9f43f`）独立保存；临时 `feat/gameplay-core-v03-local` 分支与 `/Users/ely/.codex/worktrees/e7c2/passely` 工作树已删除。Gate A 尚待当前地图二进制事务复核、L3 micro cell、fresh Editor build、PIE 与人工验收。
 - **L1 micro baseline 已测试通过**：Capture / Carry / Transfer / Consume / Reset 的最小闭环已有 PIE 证据；后续不重做 L1，只在 Gate A 做回归。
 - **human readability 未完成**：首次玩家理解测试（Sep 1 门禁）尚未执行；瞄准/可读性需要人工试玩判断。
 - **当前已保存 `L_TestChamber` 只到 L1 + L2 fixture**：地图包含 12 个 Actor；存在 `Source_Linear_001`、Forward `Receiver_Linear_001`、Up `Receiver_Up_L2` 与 `RoomReset_EXP001`，不存在 Charger、独立 blocking wall 或 L3 Environment Outcome。
 - **当前主线是 L2 → L3**：回退后出现的鼠标、过肩镜头、准星与 Receiver 目标侧方向预览问题，作为 L2 micro 的交互前置阻塞处理，不把它们包装成一次 L1 重做。
-- **当前二进制事务待人工确认**：`L_TestChamber.umap` 当前只有 staged 修改；继续写地图前先确认该 staged baseline，再开始新的窄事务。
+- **地图二进制 baseline 已保存**：`L_TestChamber.umap` 的 staged 修改已随 `d330aae` 提交；后续地图写入以该提交为 baseline，开启新的窄事务。
 
 ## Verified
 

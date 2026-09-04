@@ -17,6 +17,16 @@
 > [!IMPORTANT]
 > **EXP-001 Engineering Validated；v0.3 Core Implemented**：原始 `Source → Player → Receiver` 闭环与 20/20 Reset 已在 PIE 验证。v0.3 direction semantics 已提升到契约；Gate A code support 已完成 macOS Editor 构建与 10/10 Motion 自动化。新语义 PIE、micro cells、关卡内 Charger、human readability、打包与完整跨平台验证仍未完成。
 
+## 仓库分支
+
+| 分支 | 用途与状态 |
+| --- | --- |
+| `main` | 稳定基线：已合入并关闭的 EXP-001 工程验证 |
+| `feat/gameplay-core-v03` | 当前 v0.3 gameplay 开发线；Gate A code support 与设计/计划文档已同步到远端 |
+| `BP_LD_BeatMarker` | 关卡设计 BeatMarker 工具线；已推送并保存在远端，作为工具记录独立保留 |
+
+日常 gameplay 工作在 `feat/gameplay-core-v03` 进行。工具或实验内容需要单独保存时，请直接推送独立命名的远端分支，不要再派生 `-local` 副本，避免本地与远端分支漂移。
+
 ## 核心玩法
 
 ```text
