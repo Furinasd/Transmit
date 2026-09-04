@@ -1,11 +1,11 @@
 #include "Motion/TransmitChargerActor.h"
 
-#include "Components/ArrowComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
+#include "Motion/MotionDirectionIndicatorComponent.h"
 #include "Motion/MotionRoomResetController.h"
 #include "Motion/MotionTransferComponent.h"
 #include "TimerManager.h"
@@ -41,13 +41,12 @@ ATransmitChargerActor::ATransmitChargerActor()
     ThreatIndicator->SetLightColor(FLinearColor(1.0f, 0.12f, 0.05f));
     ThreatIndicator->SetVisibility(false);
 
-    DirectionIndicator = CreateDefaultSubobject<UArrowComponent>(TEXT("DirectionIndicator"));
+    DirectionIndicator = CreateDefaultSubobject<UMotionDirectionIndicatorComponent>(
+        TEXT("DirectionIndicator"));
     DirectionIndicator->SetupAttachment(Collision);
     DirectionIndicator->SetRelativeLocation(FVector(0.0f, 0.0f, 120.0f));
-    DirectionIndicator->SetArrowColor(FColor::Red);
-    DirectionIndicator->SetArrowSize(2.5f);
-    DirectionIndicator->SetHiddenInGame(false);
-    DirectionIndicator->SetVisibility(false);
+    DirectionIndicator->SetDirectionColor(FLinearColor(1.0f, 0.12f, 0.05f));
+    DirectionIndicator->SetAutoRefreshEnabled(false);
 
     Motion = CreateDefaultSubobject<UMotionTransferComponent>(TEXT("Motion"));
     Motion->ParticipantId = TEXT("Charger");
@@ -231,10 +230,14 @@ void ATransmitChargerActor::RefreshPresentation()
     const bool bShowsDirection = StateMachine
         && (StateMachine->GetState() == EMotionChargerState::Telegraph
             || StateMachine->GetState() == EMotionChargerState::Dash);
-    DirectionIndicator->SetVisibility(bShowsDirection);
-    DirectionIndicator->SetHiddenInGame(false);
     if (bShowsDirection)
     {
-        DirectionIndicator->SetWorldRotation(DashDirection.GetSafeNormal().Rotation());
+        DirectionIndicator->ShowDirection(
+            DashDirection.GetSafeNormal(),
+            DashMotionMagnitude);
+    }
+    else
+    {
+        DirectionIndicator->HideDirection();
     }
 }

@@ -2,16 +2,23 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Components/ArrowComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Motion/TransmitChargerActor.h"
+#include "Engine/Blueprint.h"
+#include "Engine/SCS_Node.h"
+#include "Engine/SimpleConstructionScript.h"
 #include "Motion/MotionCanonicalDirectionResolver.h"
 #include "Motion/MotionChargerStateMachine.h"
 #include "Motion/MotionGameplayTags.h"
+#include "Motion/MotionDirectionIndicatorComponent.h"
 #include "Motion/MotionInteractorComponent.h"
 #include "Motion/MotionTransferComponent.h"
 #include "Motion/MotionTransferSettings.h"
 #include "Motion/MotionTransferable.h"
+#include "Motion/TransmitChargerActor.h"
+#include "Motion/TransmitMotionEndpointActor.h"
+#include "Motion/TransmitPlayerController.h"
 
 namespace MotionTransferTests
 {
@@ -770,6 +777,174 @@ bool FMotionChargerActorCaptureGateTest::RunTest(const FString& Parameters)
 
     ReleaseComponent(Player);
     Charger->RemoveFromRoot();
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMotionPlayerControllerCursorDefaultTest,
+    "Transmit.MotionTransfer.PlayerControllerCursorDefault",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMotionPlayerControllerCursorDefaultTest::RunTest(const FString& Parameters)
+{
+    const ATransmitPlayerController* PlayerController =
+        GetDefault<ATransmitPlayerController>();
+    TestNotNull(TEXT("Transmit Player Controller default exists"), PlayerController);
+    if (!PlayerController)
+    {
+        return false;
+    }
+
+    TestTrue(
+        TEXT("Transmit Player Controller starts with a visible gameplay cursor"),
+        PlayerController->bShowMouseCursor);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMotionDirectionIndicatorRuntimeGeometryTest,
+    "Transmit.MotionTransfer.DirectionIndicatorRuntimeGeometry",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMotionDirectionIndicatorRuntimeGeometryTest::RunTest(const FString& Parameters)
+{
+    const UMotionDirectionIndicatorComponent* Indicator =
+        GetDefault<UMotionDirectionIndicatorComponent>();
+    TestNotNull(TEXT("Reusable direction indicator default exists"), Indicator);
+    if (!Indicator)
+    {
+        return false;
+    }
+
+    TestTrue(
+        TEXT("Direction indicator keeps its UArrowComponent base for Blueprint compatibility"),
+        Indicator->IsA<UArrowComponent>());
+    TestTrue(
+        TEXT("Inherited ArrowComponent primitives stay hidden in game"),
+        Indicator->bHiddenInGame);
+
+    const UStaticMeshComponent* RuntimeMesh = Indicator->RuntimeIndicatorMesh.Get();
+    TestNotNull(
+        TEXT("Direction indicator owns a runtime Static Mesh child"),
+        RuntimeMesh);
+    if (!RuntimeMesh)
+    {
+        return false;
+    }
+
+    TestTrue(
+        TEXT("Runtime indicator mesh is attached to the indicator component"),
+        RuntimeMesh->GetAttachParent() == Indicator);
+    TestFalse(
+        TEXT("Runtime indicator mesh is not hidden in game"),
+        RuntimeMesh->bHiddenInGame);
+
+    const UStaticMesh* IndicatorMesh = RuntimeMesh->GetStaticMesh();
+    TestNotNull(TEXT("Runtime indicator mesh owns a valid Engine mesh"), IndicatorMesh);
+    if (IndicatorMesh)
+    {
+        TestEqual(
+            TEXT("Runtime indicator mesh uses Engine runtime BasicShapes geometry"),
+            IndicatorMesh->GetPathName(),
+            TEXT("/Engine/BasicShapes/Cone.Cone"));
+    }
+
+    TestTrue(
+        TEXT("Runtime indicator mesh never competes with gameplay collision"),
+        RuntimeMesh->GetCollisionEnabled() == ECollisionEnabled::NoCollision);
+    TestFalse(
+        TEXT("Runtime indicator mesh generates no overlap events"),
+        RuntimeMesh->GetGenerateOverlapEvents());
+    TestFalse(
+        TEXT("Runtime indicator mesh casts no shadow"),
+        RuntimeMesh->CastShadow);
+    TestFalse(
+        TEXT("Runtime indicator mesh never affects navigation"),
+        RuntimeMesh->CanEverAffectNavigation());
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMotionDirectionIndicatorWiringTest,
+    "Transmit.MotionTransfer.DirectionIndicatorWiring",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMotionDirectionIndicatorWiringTest::RunTest(const FString& Parameters)
+{
+    const ATransmitMotionEndpointActor* DefaultEndpoint =
+        GetDefault<ATransmitMotionEndpointActor>();
+    TestNotNull(TEXT("Endpoint default actor exists"), DefaultEndpoint);
+    if (DefaultEndpoint)
+    {
+        const UMotionDirectionIndicatorComponent* EndpointIndicator =
+            DefaultEndpoint->DirectionIndicator.Get();
+        TestNotNull(TEXT("Endpoint owns a direction indicator"), EndpointIndicator);
+        if (EndpointIndicator)
+        {
+            TestTrue(
+                TEXT("Endpoint uses the reusable runtime direction indicator"),
+                EndpointIndicator->IsA<UMotionDirectionIndicatorComponent>());
+            TestTrue(
+                TEXT("Endpoint indicator keeps its UArrowComponent base"),
+                EndpointIndicator->IsA<UArrowComponent>());
+            TestNotNull(
+                TEXT("Endpoint indicator owns a runtime mesh child"),
+                EndpointIndicator->RuntimeIndicatorMesh.Get());
+        }
+    }
+
+    const ATransmitChargerActor* DefaultCharger =
+        GetDefault<ATransmitChargerActor>();
+    TestNotNull(TEXT("Charger default actor exists"), DefaultCharger);
+    if (DefaultCharger)
+    {
+        const UMotionDirectionIndicatorComponent* ChargerIndicator =
+            DefaultCharger->DirectionIndicator.Get();
+        TestNotNull(TEXT("Charger owns a direction indicator"), ChargerIndicator);
+        if (ChargerIndicator)
+        {
+            TestTrue(
+                TEXT("Charger uses the reusable runtime direction indicator"),
+                ChargerIndicator->IsA<UMotionDirectionIndicatorComponent>());
+            TestTrue(
+                TEXT("Charger indicator keeps its UArrowComponent base"),
+                ChargerIndicator->IsA<UArrowComponent>());
+            TestNotNull(
+                TEXT("Charger indicator owns a runtime mesh child"),
+                ChargerIndicator->RuntimeIndicatorMesh.Get());
+        }
+    }
+
+#if WITH_EDITOR
+    UBlueprint* PlayerBlueprint = LoadObject<UBlueprint>(
+        nullptr,
+        TEXT("/Game/Transmit/Blueprints/BP_TransmitCharacter.BP_TransmitCharacter"));
+    TestNotNull(TEXT("Player character Blueprint is inspectable"), PlayerBlueprint);
+    if (PlayerBlueprint && PlayerBlueprint->SimpleConstructionScript)
+    {
+        bool bHasRuntimeDirectionIndicator = false;
+        for (USCS_Node* Node : PlayerBlueprint->SimpleConstructionScript->GetAllNodes())
+        {
+            if (!Node || !Node->ComponentClass)
+            {
+                continue;
+            }
+
+            if (Node->ComponentClass ==
+                UMotionDirectionIndicatorComponent::StaticClass())
+            {
+                bHasRuntimeDirectionIndicator = true;
+                TestTrue(
+                    TEXT("Serialized direction node class keeps UArrowComponent as a base"),
+                    Node->ComponentClass->IsChildOf(UArrowComponent::StaticClass()));
+            }
+        }
+
+        TestTrue(
+            TEXT("Player character composes the reusable runtime direction indicator"),
+            bHasRuntimeDirectionIndicator);
+    }
+#endif
     return true;
 }
 

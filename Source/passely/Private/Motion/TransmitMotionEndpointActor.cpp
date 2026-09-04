@@ -1,11 +1,11 @@
 #include "Motion/TransmitMotionEndpointActor.h"
 
-#include "Components/ArrowComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
+#include "Motion/MotionDirectionIndicatorComponent.h"
 #include "Motion/MotionRoomResetController.h"
 #include "Motion/MotionTransferComponent.h"
 #include "TimerManager.h"
@@ -37,13 +37,12 @@ ATransmitMotionEndpointActor::ATransmitMotionEndpointActor()
     MotionIndicator->SetLightColor(FLinearColor(0.05f, 0.8f, 1.0f));
     MotionIndicator->SetVisibility(false);
 
-    DirectionIndicator = CreateDefaultSubobject<UArrowComponent>(TEXT("DirectionIndicator"));
+    DirectionIndicator = CreateDefaultSubobject<UMotionDirectionIndicatorComponent>(
+        TEXT("DirectionIndicator"));
     DirectionIndicator->SetupAttachment(SceneRoot);
     DirectionIndicator->SetRelativeLocation(FVector(0.0f, 0.0f, 100.0f));
-    DirectionIndicator->SetArrowColor(FColor::Cyan);
-    DirectionIndicator->SetArrowSize(2.0f);
-    DirectionIndicator->SetHiddenInGame(false);
-    DirectionIndicator->SetVisibility(false);
+    DirectionIndicator->SetDirectionColor(FLinearColor(0.05f, 0.8f, 1.0f));
+    DirectionIndicator->SetAutoRefreshEnabled(false);
 
     Motion = CreateDefaultSubobject<UMotionTransferComponent>(TEXT("Motion"));
 }
@@ -142,13 +141,13 @@ void ATransmitMotionEndpointActor::RefreshPresentation()
     const bool bHasMotion = Motion->TryGetMotionState(State);
     const bool bShowsMotion = bHasMotion || bConsumedSinceReset;
     MotionIndicator->SetVisibility(bShowsMotion);
-    DirectionIndicator->SetVisibility(bHasMotion);
-    DirectionIndicator->SetHiddenInGame(false);
-
     if (bHasMotion)
     {
-        DirectionIndicator->SetWorldRotation(State.Direction.Rotation());
-        DirectionIndicator->SetArrowSize(FMath::Clamp(State.Magnitude / 300.0f, 1.5f, 4.0f));
+        DirectionIndicator->ShowDirection(State.Direction, State.Magnitude);
+    }
+    else
+    {
+        DirectionIndicator->HideDirection();
     }
 
     Body->SetRelativeScale3D(
