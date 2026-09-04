@@ -20,8 +20,8 @@ namespace
     constexpr float IndicatorDistanceFromOwner = 110.0f;
 
     const FLinearColor DefaultDirectionColor(0.05f, 0.8f, 1.0f);
-    const FLinearColor TransferReadyColor(0.0f, 1.0f, 0.35f);
-    const FLinearColor DirectionMismatchColor(1.0f, 0.15f, 0.05f);
+    const FLinearColor IndicatorTransferReadyColor(0.0f, 1.0f, 0.35f);
+    const FLinearColor IndicatorDirectionMismatchColor(1.0f, 0.15f, 0.05f);
 }
 
 UMotionDirectionIndicatorComponent::UMotionDirectionIndicatorComponent()
@@ -238,12 +238,12 @@ void UMotionDirectionIndicatorComponent::RefreshFromOwner()
     if (Preview.bEligible)
     {
         CurrentMode = EMotionDirectionIndicatorMode::TransferReady;
-        SetDirectionColor(TransferReadyColor);
+        SetDirectionColor(IndicatorTransferReadyColor);
     }
     else if (Preview.Rejection == EMotionTransferRejection::IncompatibleDirection)
     {
         CurrentMode = EMotionDirectionIndicatorMode::DirectionMismatch;
-        SetDirectionColor(DirectionMismatchColor);
+        SetDirectionColor(IndicatorDirectionMismatchColor);
     }
     else
     {

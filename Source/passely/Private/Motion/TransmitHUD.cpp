@@ -12,9 +12,9 @@ namespace
     constexpr float ReticleThickness = 2.0f;
 
     const FLinearColor NeutralColor(1.0f, 1.0f, 1.0f, 0.9f);
-    const FLinearColor TransferReadyColor(0.0f, 1.0f, 0.25f, 1.0f);
+    const FLinearColor HudTransferReadyColor(0.0f, 1.0f, 0.25f, 1.0f);
     const FLinearColor CaptureReadyColor(0.0f, 0.85f, 1.0f, 1.0f);
-    const FLinearColor DirectionMismatchColor(1.0f, 0.12f, 0.05f, 1.0f);
+    const FLinearColor HudDirectionMismatchColor(1.0f, 0.12f, 0.05f, 1.0f);
     const FLinearColor InvalidTargetColor(0.75f, 0.75f, 0.75f, 0.9f);
 }
 
@@ -58,14 +58,14 @@ void ATransmitHUD::DrawHUD()
     if (Preview.bEligible)
     {
         DrawCrosshair(
-            Motion->HasMotionState() ? TransferReadyColor : CaptureReadyColor);
+            Motion->HasMotionState() ? HudTransferReadyColor : CaptureReadyColor);
         return;
     }
 
     if (Motion->HasMotionState()
         && Preview.Rejection == EMotionTransferRejection::IncompatibleDirection)
     {
-        DrawCrosshair(DirectionMismatchColor);
+        DrawCrosshair(HudDirectionMismatchColor);
         return;
     }
 
