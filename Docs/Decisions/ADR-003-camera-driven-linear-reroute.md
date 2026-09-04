@@ -1,8 +1,30 @@
 # ADR-003: Camera-Driven Linear Reroute (v0.3 Direction Semantics)
 
-- Status: Accepted (implementation in progress)
+- Status: Accepted; amended by Final v0.4 scope below (2026-09-05)
 - Date: 2026-09-01
 - Owners: Project design and engineering
+
+## Amendment 1 — Final v0.4 scope and explicit exception (2026-09-05)
+
+**Scope.** This ADR governs **Ordinary Linear Motion** only. CameraCanonical remains the default Transfer policy for ordinary Linear Motion, unchanged from v0.3.
+
+**Explicit exception — Boss High Motion (PreserveSource).** Boss High Motion captured from a Charger Dash is direction-locked:
+
+- The transferred direction is the committed Dash world direction (the Dash vector), preserved from Capture.
+- It bypasses CameraCanonical: camera pose does not rewrite the direction; the Player chooses Capture timing and Transfer Target only.
+- Preview and Commit use the same preserved world direction. The exception does not weaken Preview = Commit.
+
+**Role changes under v0.4.**
+
+- Directional Carrier is the ordinary-Linear primary Target for Zone 1 / Zone 2: it accepts any of the six resolved canonical directions and moves its Actor in world space with deterministic swept collision, stops on blocking collision, remains re-capturable, and is restored by Reset. This role adds a Target behavior, not a direction-policy change.
+- `RequiredCanonicalDirection` is retained as a compatibility / regression capability only and is no longer the core Zone 2 mechanic.
+- The final playable is one continuous `L_Transmit` map (Zone 1 Learn → Zone 2 Route → Zone 3 Weaponize). L1 / L2 / L3 are progression IDs, not independent production maps.
+
+**Unchanged / frozen.** Ownership, atomic transaction, rejection preservation, Reset semantics, targeting, and the canonical resolver implementation remain as decided in v0.3.
+
+**Implementation consequence (promoted, not yet implemented).** The runtime needs an explicit source-authored direction-policy distinction so captured Dash Motion does not enter the ordinary resolver on Transfer; inferring policy from magnitude or `SourceId` is not acceptable.
+
+The original v0.3 text below is preserved unchanged as decision history.
 
 ## Context
 

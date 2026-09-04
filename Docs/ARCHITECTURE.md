@@ -1,6 +1,6 @@
 # Transmit Architecture
 
-> Status: EXP-001 engineering validated; the v0.3 camera-driven six-direction core and Gate A code support are implemented and automated-verified on `feat/gameplay-core-v03`. Micro-cell asset validation, PIE, and human acceptance remain open. Sections still marked "Proposed" are target design.
+> Status: Final v0.4 design lock promoted to repository docs on 2026-09-05 (docs-only). The v0.3 ordinary-Linear resolver core, Charger FSM, Charger swept movement, and Actor dispatch are implemented and automated-verified on `feat/gameplay-core-v03` (HEAD `1fb96ea`). Directional Carrier and Boss High Motion direction policy are v0.4-promoted runtime deltas that are not implemented yet; `L_Transmit` is future content. Sections still marked "Proposed" are target design.
 
 ## Scope
 
@@ -20,6 +20,8 @@ Read project context in this order:
 The GitHub repository is named `Transmit`. The Unreal project file and internal game name remain `passely`; renaming those identifiers is outside this architecture bootstrap because serialized assets and future native-module paths may depend on them.
 
 The project now has a custom C++ runtime module under `Source/passely/` (Motion types, ownership component, Actor interface, interactor, room reset, endpoint/indicator actors, and focused automation tests) plus a Blueprint layer under `Content/Transmit/` (input assets, Character/Controller/GameMode/Source/Receiver Blueprints, and `L_TestChamber`). There is no project-local plugin content under `Plugins/`.
+
+Map architecture under Final v0.4: `L_TestChamber` is the regression / micro-validation map; `L_Transmit` is the single production map containing continuous Zone 1 Learn → Zone 2 Route → Zone 3 Weaponize. `L_Transmit` does not exist in the repository and is future content; L1 / L2 / L3 remain design progression IDs, not independent `.umap` files.
 
 | Boundary | Current responsibility |
 | --- | --- |
@@ -64,6 +66,9 @@ The configuration-to-asset path above is present. A Transfer path now exists und
 FMotionState (runtime value)
         ├── Type: Linear [P0]
         ├── DirectionOrAxis
+        ├── DirectionPolicy: Ordinary Linear = CameraCanonical,
+        │                     Boss High Motion = PreserveSource (Dash world direction)
+        │                     [v0.4 promoted; not yet implemented]
         ├── Magnitude
         ├── OptionalPeriod / Phase [future]
         └── SourceId / DebugTag
@@ -124,14 +129,17 @@ The targeting layer (`UMotionInteractorComponent`) produces a stable candidate p
 
 Soft-cone assistance and short target stickiness belong here. The transaction layer revalidates the selected actor at commit time and remains authoritative.
 
-## Direction Resolver Boundary (v0.3)
+## Direction Policy Boundary (Final v0.4)
 
-Target selection and direction resolution are physically decoupled:
+Target selection and direction resolution are physically decoupled. Direction policy is a property of the carried Motion, not of the camera or the Target:
 
-- `UMotionInteractorComponent` owns target selection and carries the resolver result.
-- `UMotionCanonicalDirectionResolver` maps (carried Linear direction + gameplay camera pose) → one of six canonical directions and a world-space `ProjectedWorldDirection`, with pitch and sector hysteresis.
-- The resolution travels inside `FMotionTransferContext.DirectionResolution`, so Preview and Commit consume the **same resolver result**; the committed Transfer moves the resolved state (`Direction = ProjectedWorldDirection`) to the Target.
-- Receivers declare a `RequiredCanonicalDirection`; a mismatch is `IncompatibleDirection` and never consumes Player Motion.
+- **Ordinary Linear — CameraCanonical**: `UMotionCanonicalDirectionResolver` maps (carried Linear direction + gameplay camera pose) → one of six canonical directions and a world-space `ProjectedWorldDirection`, with pitch and sector hysteresis. This is the implemented, frozen v0.3 resolver.
+- **Boss High Motion — PreserveSource**: direction stays locked to the committed Charger Dash world direction and bypasses the camera resolver. This policy is promoted by v0.4 and not implemented; current code carries no explicit direction-policy marker, so captured Dash Motion still enters CameraCanonical on Transfer. The policy must not be inferred from magnitude or `SourceId`.
+- **Preview = Commit is policy-independent**: whichever policy applies, the interactor computes the world direction once and carries it inside `FMotionTransferContext.DirectionResolution`; Preview and Commit consume the same result.
+- **`RequiredCanonicalDirection`**: receivers may declare one of the six canonical directions; a mismatch is `IncompatibleDirection` and never consumes Player Motion. This is a compatibility/regression capability, not the Zone 2 core mechanic.
+- **Directional Carrier (promoted, not implemented)**: the ordinary-Linear Target role that accepts any of the six resolved directions and moves itself — the Actor, not a child presentation mesh — in world space. It must use deterministic swept collision, stop on blocking collision, remain a valid Source for re-capture, and be restored by the existing Room Reset snapshot.
+
+The seam for this change is the existing `FMotionTransferContext`/state path: introduce one source-authored direction-policy value, resolve the world direction once per policy, and keep ownership mutation (`TryMoveBetween`) untouched.
 
 ## Proposed Control and Data Flow
 
@@ -159,16 +167,21 @@ Transfer input
         ↓
 Resolve IMotionTransferable Target
         ↓
-Canonical Direction Resolver: carried Linear direction + gameplay camera
-        → one of Forward / Back / Left / Right / Up / Down
+Determine direction policy from the carried Motion
+        ├── Ordinary Linear → CameraCanonical: carried direction + gameplay camera
+        │         → one of Forward / Back / Left / Right / Up / Down
+        └── Boss High Motion → PreserveSource: committed Dash world direction
+                              [v0.4 promoted; not yet implemented]
         ↓
-Preview + commit-time CanReceiveMotion(resolved state, same resolution)
+Compute one world direction; carry it in FMotionTransferContext.DirectionResolution
+        ↓
+Preview + commit-time CanReceiveMotion(resolved state, same direction)
         ↓
 Atomically clear Player.CurrentMotion and set/consume resolved state at Target
         ↓
 Emit transferred/state-changed result
         ↓
-Target movement/function + causal presentation
+Target movement/function (Carrier moves in world space) + causal presentation
 ```
 
 Validation occurs during preview and again at commit because world state may change between them. A rejected transaction preserves the current owner and returns a structured reason such as type, direction, magnitude, occlusion, timing, or target invalidation.
@@ -182,7 +195,7 @@ A converter is a deterministic mapping from an input Motion signature and entry 
 - `PreviewOutputSignature` must use the same rule as committed conversion.
 - Critical conversion should use constrained or authored motion when full Chaos simulation would make identical inputs diverge.
 
-Converters do not authorize the Player to rewrite direction freely. Under v0.3, the only P0 direction change is the camera-driven canonical reroute at Transfer; Redirect Rail is superseded for P0 L2 (ADR-003) and remains a possible deterministic converter.
+Converters do not authorize the Player to rewrite direction freely. Under Final v0.4, ordinary Linear is rerouted by CameraCanonical at Transfer; Boss High Motion keeps its captured Dash world direction (PreserveSource) and does not pass through a converter for direction. Redirect Rail remains a possible deterministic converter and is not the Zone 2 mechanism (ADR-003).
 
 ## Proposed Event Boundary
 
@@ -234,10 +247,26 @@ Core Motion Transfer code must not depend on a specific Player, Enemy, Environme
 
 ## Current Implementation Boundary
 
-As of 2026-09-03, Part 1 code support is complete and Gate A playable validation remains in progress on `feat/gameplay-core-v03`:
+As of 2026-09-05, HEAD `1fb96ea` (`feat/gameplay-core-v03`) is the committed checkpoint. Runtime state by category:
 
-- New v0.3 core: `UMotionCanonicalDirectionResolver` (six canonical directions, pitch + sector hysteresis, deterministic), `FMotionDirectionResolution` carried inside `FMotionTransferContext`, `EMotionCanonicalDirection` Receiver requirements, `ATransmitChargerActor` + `UMotionChargerStateMachine` (Telegraph → Dash → Recovery with a capture window), `EMotionTransferRejection::TimingRejected`, and `UMotionTransferComponent::GrantMotionState`.
-- Preview = Commit: the interactor resolves the carried direction once per frame and passes the same resolution into `TryTransferToActor`; the committed Transfer moves the resolved state (`Direction = ProjectedWorldDirection`), and receivers evaluate `RequiredCanonicalDirection` against that same resolution.
-- Actor dispatch and Charger movement: `IMotionTransferable::Call*` preserves Blueprint event dispatch while making native-only C++ implementations reachable; Charger uses a collision-enabled capsule root, presentation-only Body collision, swept dash movement, and blocking-hit Recovery.
-- Automated validation: the normal warning-clean macOS `passelyEditor` build succeeds; 10/10 `Transmit.MotionTransfer` tests pass, including native Actor-path Charger Capture and Charger structure/capture-gate coverage. Earlier Blueprint validation reported `EXP001_VALIDATE SUCCESS`, but the current dirty `L_TestChamber` still requires a fresh Blueprint compile and Map Check after human inspection.
-- Still unverified: PIE under the new reroute semantics, L1-L3 micro test cells, a level-placed Charger, first-player comprehension, packaging, and full cross-platform release behavior.
+**Implemented / verified**
+
+- v0.3 ordinary-Linear core: `UMotionCanonicalDirectionResolver` (six canonical directions, pitch + sector hysteresis, deterministic), `FMotionDirectionResolution` carried inside `FMotionTransferContext`, `EMotionCanonicalDirection` Receiver requirements, and `UMotionTransferComponent::GrantMotionState`.
+- Charger: `ATransmitChargerActor` + `UMotionChargerStateMachine` (Telegraph → Dash → Recovery with a capture window), collision-enabled capsule root, presentation-only Body collision, swept dash movement, blocking-hit Recovery, and `EMotionTransferRejection::TimingRejected`.
+- Actor dispatch: `IMotionTransferable::Call*` preserves Blueprint event dispatch while making native-only C++ implementations reachable.
+- Historical evidence: macOS `passelyEditor` build succeeded and 10/10 `Transmit.MotionTransfer` tests passed; EXP-001 PIE loop and 20/20 Reset were verified on the pre-v0.3 baseline. A fresh source-aligned rerun on HEAD `1fb96ea` is not yet recorded.
+
+**Pre-existing committed work (checkpoint `1fb96ea`, not v0.4 deltas)**
+
+- `TransmitHUD`, `MotionDirectionIndicatorComponent` presentation rework, `TransmitMotionEndpointActor` presentation changes, canonical resolver camera-pitch Up/Down update with tests, and `BP_TransmitGameMode` asset update.
+
+**v0.4 promoted, not implemented**
+
+- Directional Carrier actor: no world-space actor movement, swept blocking stop, re-capture path, or carrier test exists. The existing `TransmitMotionEndpointActor` only loops a child `Body` presentation and cannot substitute.
+- Direction-policy seam: no policy field exists in `FMotionState`/context, so captured Charger Dash Motion is still camera-rerouted on Transfer instead of preserving the committed Dash world direction.
+- Open consistency defect against frozen Preview = Commit: the default Actor-path Preview discards `FMotionTransferContext.DirectionResolution` (it calls `CanReceiveState(State)` without the resolution) while the component-level Commit rechecks with the resolution. A `RequiredCanonicalDirection` Receiver can therefore preview eligible and reject at commit. Existing tests call the component directly and do not cover the Actor path.
+- Ram Block content role for Zone 3.
+
+**Future content**
+
+- `L_Transmit` single map, Zone 1 Learn → Zone 2 Route → Zone 3 Weaponize blockout, Bridge Slab / Ram Rail / Ram / Breakable Gate / Boss encounter content, presentation pass, and first-player playtest.

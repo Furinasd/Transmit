@@ -1,8 +1,11 @@
 # Gate A L1-L3 Micro-Cell Validation Blueprint
 
 - Timestamp: 2026-09-02 +08:00
-- Status: Design and validation blueprint
+- Status: **Superseded 2026-09-05 by the Final v0.4 design lock** — historical v0.3 / Gate A blueprint retained for provenance; not the current plan or authority
 - Scope: L1-L3 gameplay capability validation in `L_TestChamber`; no final level production
+
+> [!WARNING]
+> **本文档已被 Final v0.4 design lock（2026-09-05）取代。** 以下内容保留为 v0.3 / Gate A 决策与验证历史，不再代表当前排期或实现 authority。Final v0.4 只保留两个 P0 runtime delta：Directional Carrier / Re-capture 与 Boss High Motion direction lock；正式 playable 是单张 `L_Transmit`（Zone 1 Learn → Zone 2 Route → Zone 3 Weaponize），L1 / L2 / L3 不再对应三张生产图。仍继承有效的回归项：ownership、原子事务、rejection preservation、Preview = Commit、Charger timing、Reset。`RequiredCanonicalDirection` 降级为 compatibility / regression capability；High Motion 不再 camera-reroute。当前规则以 `DESIGN_CONTRACT.md` / `ARCHITECTURE.md` / `STATE.md` 为准。
 
 ## Goal
 
