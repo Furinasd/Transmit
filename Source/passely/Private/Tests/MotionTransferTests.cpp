@@ -2,8 +2,11 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "Motion/TransmitChargerActor.h"
 #include "Motion/MotionCanonicalDirectionResolver.h"
 #include "Motion/MotionChargerStateMachine.h"
@@ -12,6 +15,7 @@
 #include "Motion/MotionTransferComponent.h"
 #include "Motion/MotionTransferSettings.h"
 #include "Motion/MotionTransferable.h"
+#include "Motion/TransmitDirectionalCarrierActor.h"
 #include "Motion/TransmitMotionEndpointActor.h"
 
 namespace MotionTransferTests
@@ -100,6 +104,34 @@ namespace MotionTransferTests
         if (Actor)
         {
             Actor->RemoveFromRoot();
+        }
+    }
+
+    static ATransmitDirectionalCarrierActor* MakeCarrier(
+        const FName ParticipantId,
+        const float MovementSpeed)
+    {
+        ATransmitDirectionalCarrierActor* Carrier =
+            NewObject<ATransmitDirectionalCarrierActor>(GetTransientPackage());
+        Carrier->AddToRoot();
+        Carrier->MovementSpeed = MovementSpeed;
+        if (Carrier->Motion)
+        {
+            Carrier->Motion->ConfigureForTesting(
+                ParticipantId,
+                /* bCanProvideMotion */ true,
+                /* bCanReceiveMotion */ true,
+                EMotionEndpointMode::Store,
+                TOptional<FMotionState>());
+        }
+        return Carrier;
+    }
+
+    static void ReleaseCarrier(ATransmitDirectionalCarrierActor* Carrier)
+    {
+        if (Carrier)
+        {
+            Carrier->RemoveFromRoot();
         }
     }
 }
@@ -1018,6 +1050,309 @@ bool FMotionPreserveSourceDirectionPolicyTest::RunTest(const FString& Parameters
     ReleaseResolver(Resolver);
     ReleaseComponent(Player);
     ReleaseComponent(Source);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMotionDirectionalCarrierCoreTest,
+    "Transmit.MotionTransfer.DirectionalCarrierCore",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMotionDirectionalCarrierCoreTest::RunTest(const FString& Parameters)
+{
+    using namespace MotionTransferTests;
+
+    FMotionState State = MakeState(TEXT("Source.Linear.001"), 600.0f);
+    State.Direction = FVector::ForwardVector;
+    UMotionTransferComponent* Source = MakeComponent(
+        TEXT("Source"),
+        true,
+        false,
+        EMotionEndpointMode::Store,
+        State);
+    UMotionTransferComponent* Player = MakeComponent(
+        TEXT("Player"),
+        false,
+        true,
+        EMotionEndpointMode::Store);
+    UMotionCanonicalDirectionResolver* Resolver = MakeResolver();
+    ATransmitDirectionalCarrierActor* Carrier = MakeCarrier(TEXT("Carrier"), 400.0f);
+    TestNotNull(TEXT("Carrier was created"), Carrier);
+    if (!Carrier)
+    {
+        ReleaseResolver(Resolver);
+        ReleaseComponent(Player);
+        ReleaseComponent(Source);
+        return false;
+    }
+    Carrier->SetActorLocation(FVector::ZeroVector);
+
+    const FMotionTransferResult Capture = Player->TryCaptureFromComponent(Source);
+    TestTrue(TEXT("Carrier setup capture succeeds"), Capture.bSucceeded);
+    FMotionState Carried;
+    TestTrue(TEXT("Player owns Motion before Carrier transfer"), Player->TryGetMotionState(Carried));
+
+    // A/B: receive ordinary resolved Linear, then begin world movement along
+    // the resolved direction (camera pitch selects Up).
+    Resolver->ResetHysteresis();
+    const FRotator CameraPitchUp(50.0f, 0.0f, 0.0f);
+    const FMotionDirectionResolution Resolution =
+        UMotionInteractorComponent::ResolveTransferDirection(
+            Carried,
+            CameraPitchUp,
+            Resolver);
+    TestTrue(
+        TEXT("Carrier transfer resolves to Up"),
+        Resolution.bValid
+            && Resolution.CanonicalDirection == EMotionCanonicalDirection::Up);
+
+    FMotionTransferContext TransferContext;
+    TransferContext.bInRange = true;
+    TransferContext.bOccluded = false;
+    TransferContext.DirectionResolution = Resolution;
+    const FMotionTransferResult Transfer =
+        Player->TryTransferToActor(Carrier, TransferContext);
+    TestTrue(TEXT("Carrier receives ordinary Linear Motion"), Transfer.bSucceeded);
+    TestTrue(TEXT("Carrier owns Motion after receive"), Carrier->Motion->HasMotionState());
+    Carrier->Tick(0.0f);
+    TestTrue(TEXT("Carrier becomes movement-active after receive"), Carrier->IsMovementActive());
+
+    FMotionState CarrierState;
+    TestTrue(TEXT("Carrier state is queryable"), Carrier->Motion->TryGetMotionState(CarrierState));
+    TestTrue(
+        TEXT("Carrier direction follows the resolved ordinary direction"),
+        CarrierState.Direction.Equals(FVector::UpVector, 1e-3f));
+
+    const FVector LocationBefore = Carrier->GetActorLocation();
+    Carrier->Tick(0.25f);
+    const FVector LocationAfter = Carrier->GetActorLocation();
+    TestTrue(
+        TEXT("Carrier root moved in world space along the resolved direction"),
+        (LocationAfter - LocationBefore).Z > 1.0f);
+    TestTrue(
+        TEXT("Carrier did not drift on the horizontal axes"),
+        FMath::IsNearlyZero((LocationAfter - LocationBefore).X, 1e-2f)
+            && FMath::IsNearlyZero((LocationAfter - LocationBefore).Y, 1e-2f));
+
+    // D/E: capture the moving Carrier; the existing ownership transaction
+    // removes the state and gameplay movement stops immediately.
+    FMotionTransferContext CaptureContext;
+    CaptureContext.bInRange = true;
+    CaptureContext.bOccluded = false;
+    const FMotionTransferResult CarrierCapture =
+        Player->TryCaptureFromActor(Carrier, CaptureContext);
+    TestTrue(TEXT("Player captures Motion from the Carrier"), CarrierCapture.bSucceeded);
+    TestTrue(TEXT("Player owns the captured Motion"), Player->HasMotionState());
+    TestFalse(TEXT("Carrier is empty after capture"), Carrier->Motion->HasMotionState());
+    Carrier->Tick(0.0f);
+    TestFalse(TEXT("Capture stops Carrier movement"), Carrier->IsMovementActive());
+    TestFalse(TEXT("Capture leaves no collision-stop state"), Carrier->IsBlockedByCollision());
+
+    // F: re-transfer the captured Motion to another valid target using the
+    // existing rules.
+    ATransmitMotionEndpointActor* ReceiverActor = MakeEndpointActor(
+        TEXT("Actor.Receiver.Store"),
+        EMotionCanonicalDirection::None,
+        EMotionEndpointMode::Store);
+    TestNotNull(TEXT("Store receiver was created"), ReceiverActor);
+    if (ReceiverActor)
+    {
+        FMotionState Recarried;
+        TestTrue(TEXT("Player carries Motion for re-transfer"), Player->TryGetMotionState(Recarried));
+        FMotionTransferContext ReTransferContext;
+        ReTransferContext.bInRange = true;
+        ReTransferContext.bOccluded = false;
+        ReTransferContext.DirectionResolution =
+            UMotionInteractorComponent::ResolveTransferDirection(
+                Recarried,
+                CameraPitchUp,
+                Resolver);
+        const FMotionTransferResult ReTransfer =
+            Player->TryTransferToActor(ReceiverActor, ReTransferContext);
+        TestTrue(TEXT("Captured Motion re-transfers to another target"), ReTransfer.bSucceeded);
+        TestTrue(TEXT("Store receiver owns the re-transferred Motion"), ReceiverActor->Motion->HasMotionState());
+        ReleaseEndpointActor(ReceiverActor);
+    }
+
+    ReleaseCarrier(Carrier);
+    ReleaseResolver(Resolver);
+    ReleaseComponent(Player);
+    ReleaseComponent(Source);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMotionDirectionalCarrierResetTest,
+    "Transmit.MotionTransfer.DirectionalCarrierReset",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMotionDirectionalCarrierResetTest::RunTest(const FString& Parameters)
+{
+    using namespace MotionTransferTests;
+
+    FMotionState State = MakeState(TEXT("Source.Linear.Reset"), 600.0f);
+    State.Direction = FVector::ForwardVector;
+    UMotionTransferComponent* Source = MakeComponent(
+        TEXT("Source"),
+        true,
+        false,
+        EMotionEndpointMode::Store,
+        State);
+    UMotionTransferComponent* Player = MakeComponent(
+        TEXT("Player"),
+        false,
+        true,
+        EMotionEndpointMode::Store);
+    UMotionCanonicalDirectionResolver* Resolver = MakeResolver();
+    ATransmitDirectionalCarrierActor* Carrier = MakeCarrier(TEXT("Carrier"), 400.0f);
+    TestNotNull(TEXT("Reset Carrier was created"), Carrier);
+    if (!Carrier)
+    {
+        ReleaseResolver(Resolver);
+        ReleaseComponent(Player);
+        ReleaseComponent(Source);
+        return false;
+    }
+
+    const FVector InitialLocation(100.0f, 200.0f, 300.0f);
+    for (int32 Cycle = 0; Cycle < 3; ++Cycle)
+    {
+        Carrier->SetActorLocation(InitialLocation);
+        TestTrue(
+            FString::Printf(TEXT("Cycle %d Carrier reset succeeds"), Cycle + 1),
+            Carrier->Motion->RestoreInitialState(true));
+        TestTrue(
+            TEXT("Reset source state succeeds"),
+            Source->RestoreInitialState(false));
+        TestTrue(
+            TEXT("Reset Player state succeeds"),
+            Player->RestoreInitialState(false));
+        TestFalse(TEXT("Carrier is empty after reset"), Carrier->Motion->HasMotionState());
+        TestFalse(TEXT("Carrier movement is inactive after reset"), Carrier->IsMovementActive());
+        TestFalse(TEXT("Carrier collision-stop state is clear after reset"), Carrier->IsBlockedByCollision());
+
+        const FMotionTransferResult Capture = Player->TryCaptureFromComponent(Source);
+        TestTrue(FString::Printf(TEXT("Cycle %d capture succeeds"), Cycle + 1), Capture.bSucceeded);
+        FMotionState Carried;
+        TestTrue(TEXT("Player carries Motion in cycle"), Player->TryGetMotionState(Carried));
+
+        Resolver->ResetHysteresis();
+        const FRotator CameraPitchUp(50.0f, 0.0f, 0.0f);
+        FMotionTransferContext TransferContext;
+        TransferContext.bInRange = true;
+        TransferContext.bOccluded = false;
+        TransferContext.DirectionResolution =
+            UMotionInteractorComponent::ResolveTransferDirection(
+                Carried,
+                CameraPitchUp,
+                Resolver);
+        const FMotionTransferResult Transfer =
+            Player->TryTransferToActor(Carrier, TransferContext);
+        TestTrue(FString::Printf(TEXT("Cycle %d Carrier receives Motion"), Cycle + 1), Transfer.bSucceeded);
+        Carrier->Tick(0.0f);
+        TestTrue(TEXT("Carrier is movement-active in cycle"), Carrier->IsMovementActive());
+
+        Carrier->Tick(0.2f);
+        TestFalse(
+            TEXT("Carrier moved away from the initial transform in cycle"),
+            Carrier->GetActorLocation().Equals(InitialLocation, 1e-2f));
+
+        FMotionTransferContext CaptureContext;
+        CaptureContext.bInRange = true;
+        CaptureContext.bOccluded = false;
+        const FMotionTransferResult CarrierCapture =
+            Player->TryCaptureFromActor(Carrier, CaptureContext);
+        TestTrue(FString::Printf(TEXT("Cycle %d Carrier capture succeeds"), Cycle + 1), CarrierCapture.bSucceeded);
+        Carrier->Tick(0.0f);
+        TestFalse(TEXT("Carrier stops moving after cycle capture"), Carrier->IsMovementActive());
+    }
+
+    ReleaseCarrier(Carrier);
+    ReleaseResolver(Resolver);
+    ReleaseComponent(Player);
+    ReleaseComponent(Source);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMotionDirectionalCarrierCollisionTest,
+    "Transmit.MotionTransfer.DirectionalCarrierCollision",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMotionDirectionalCarrierCollisionTest::RunTest(const FString& Parameters)
+{
+    using namespace MotionTransferTests;
+
+    UWorld* World = UWorld::CreateWorld(EWorldType::Game, false);
+    TestNotNull(TEXT("Collision test world was created"), World);
+    if (!World)
+    {
+        return false;
+    }
+
+    ATransmitDirectionalCarrierActor* Carrier =
+        World->SpawnActor<ATransmitDirectionalCarrierActor>(
+            FVector::ZeroVector,
+            FRotator::ZeroRotator);
+    TestNotNull(TEXT("World Carrier was spawned"), Carrier);
+    if (!Carrier)
+    {
+        World->DestroyWorld(false);
+        return false;
+    }
+
+    AActor* Blocker = World->SpawnActor<AActor>(
+        FVector(300.0f, 0.0f, 0.0f),
+        FRotator::ZeroRotator);
+    TestNotNull(TEXT("Blocker was spawned"), Blocker);
+    UBoxComponent* BlockerBox = NewObject<UBoxComponent>(Blocker);
+    BlockerBox->SetBoxExtent(FVector(50.0f, 50.0f, 50.0f));
+    BlockerBox->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+    BlockerBox->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+    BlockerBox->SetCollisionResponseToAllChannels(ECR_Block);
+    Blocker->SetRootComponent(BlockerBox);
+    BlockerBox->RegisterComponent();
+    BlockerBox->SetWorldLocation(FVector(300.0f, 0.0f, 0.0f));
+    Blocker->SetActorLocation(FVector(300.0f, 0.0f, 0.0f));
+
+    Carrier->MovementSpeed = 200.0f;
+    if (Carrier->Motion)
+    {
+        Carrier->Motion->ConfigureForTesting(
+            TEXT("Carrier"),
+            true,
+            true,
+            EMotionEndpointMode::Store,
+            TOptional<FMotionState>());
+    }
+
+    FMotionState DashLike = MakeState(TEXT("Source.Linear.Collision"), 600.0f);
+    DashLike.Direction = FVector::ForwardVector;
+    TestTrue(
+        TEXT("Collision Carrier receives seeded Motion"),
+        Carrier->Motion->GrantMotionState(DashLike));
+    Carrier->Tick(0.0f);
+    TestTrue(TEXT("Collision Carrier is movement-active"), Carrier->IsMovementActive());
+
+    for (int32 TickIndex = 0; TickIndex < 20; ++TickIndex)
+    {
+        Carrier->Tick(0.1f);
+    }
+
+    TestTrue(TEXT("Collision Carrier stops on blocking hit"), Carrier->IsBlockedByCollision());
+    TestFalse(TEXT("Collision Carrier stops movement after blocking hit"), Carrier->IsMovementActive());
+    TestTrue(TEXT("Collision Carrier keeps owned Motion after stop"), Carrier->Motion->HasMotionState());
+
+    const FVector StoppedLocation = Carrier->GetActorLocation();
+    for (int32 TickIndex = 0; TickIndex < 5; ++TickIndex)
+    {
+        Carrier->Tick(0.1f);
+    }
+    TestTrue(
+        TEXT("Collision Carrier does not jitter or penetrate after stop"),
+        Carrier->GetActorLocation().Equals(StoppedLocation, 1e-2f));
+
+    World->DestroyWorld(false);
     return true;
 }
 
