@@ -76,7 +76,7 @@ FMotionCompatibilityResult IMotionTransferable::CanReceiveMotion_Implementation(
 
     const UMotionTransferComponent* Component = GetMotionTransferComponent_Implementation();
     return Component
-        ? Component->CanReceiveState(State)
+        ? Component->CanReceiveState(State, &Context.DirectionResolution)
         : FMotionCompatibilityResult::Reject(EMotionTransferRejection::MissingMotionComponent);
 }
 

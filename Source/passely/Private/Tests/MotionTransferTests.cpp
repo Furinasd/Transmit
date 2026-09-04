@@ -12,6 +12,7 @@
 #include "Motion/MotionTransferComponent.h"
 #include "Motion/MotionTransferSettings.h"
 #include "Motion/MotionTransferable.h"
+#include "Motion/TransmitMotionEndpointActor.h"
 
 namespace MotionTransferTests
 {
@@ -70,6 +71,35 @@ namespace MotionTransferTests
         if (Resolver)
         {
             Resolver->RemoveFromRoot();
+        }
+    }
+
+    static ATransmitMotionEndpointActor* MakeEndpointActor(
+        const FName ParticipantId,
+        const EMotionCanonicalDirection RequiredDirection,
+        const EMotionEndpointMode EndpointMode)
+    {
+        ATransmitMotionEndpointActor* Actor =
+            NewObject<ATransmitMotionEndpointActor>(GetTransientPackage());
+        Actor->AddToRoot();
+        if (UMotionTransferComponent* Motion = Actor->Motion)
+        {
+            Motion->ConfigureForTesting(
+                ParticipantId,
+                /* bCanProvideMotion */ false,
+                /* bCanReceiveMotion */ true,
+                EndpointMode,
+                TOptional<FMotionState>());
+            Motion->RequiredCanonicalDirection = RequiredDirection;
+        }
+        return Actor;
+    }
+
+    static void ReleaseEndpointActor(ATransmitMotionEndpointActor* Actor)
+    {
+        if (Actor)
+        {
+            Actor->RemoveFromRoot();
         }
     }
 }
@@ -555,6 +585,135 @@ bool FMotionResolvedTransferTest::RunTest(const FString& Parameters)
     ReleaseComponent(ReceiverForward);
     ReleaseComponent(ReceiverUp);
     ReleaseResolver(Resolver);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMotionActorPathDirectionConsistencyTest,
+    "Transmit.MotionTransfer.ActorPathDirectionConsistency",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMotionActorPathDirectionConsistencyTest::RunTest(const FString& Parameters)
+{
+    using namespace MotionTransferTests;
+
+    FMotionState State = MakeState(TEXT("Source.Linear.001"), 600.0f);
+    State.Direction = FVector::ForwardVector;
+    UMotionTransferComponent* Source = MakeComponent(
+        TEXT("Source"), true, false, EMotionEndpointMode::Store, State);
+    UMotionTransferComponent* Player = MakeComponent(
+        TEXT("Player"), false, true, EMotionEndpointMode::Store);
+
+    ATransmitMotionEndpointActor* ReceiverActor = MakeEndpointActor(
+        TEXT("Actor.Receiver.Forward"),
+        EMotionCanonicalDirection::Forward,
+        EMotionEndpointMode::ConsumeOnReceive);
+    TestNotNull(TEXT("Actor receiver was created"), ReceiverActor);
+    if (!ReceiverActor)
+    {
+        ReleaseComponent(Player);
+        ReleaseComponent(Source);
+        return false;
+    }
+    UMotionTransferComponent* ReceiverMotion = ReceiverActor->Motion;
+    TestNotNull(TEXT("Actor receiver owns a Motion component"), ReceiverMotion);
+    if (!ReceiverMotion)
+    {
+        ReleaseEndpointActor(ReceiverActor);
+        ReleaseComponent(Player);
+        ReleaseComponent(Source);
+        return false;
+    }
+
+    UMotionCanonicalDirectionResolver* Resolver = MakeResolver();
+    const FRotator CameraYawZero(0.0f, 0.0f, 0.0f);
+    const FMotionDirectionResolution Resolution =
+        Resolver->ResolveDirection(FVector::ForwardVector, CameraYawZero);
+    TestTrue(TEXT("Actor-path test resolution is valid"), Resolution.bValid);
+    TestTrue(
+        TEXT("Actor-path test resolution is Forward"),
+        Resolution.CanonicalDirection == EMotionCanonicalDirection::Forward);
+    TestTrue(
+        TEXT("Actor receiver advertises the MotionTransferable interface"),
+        ReceiverActor->GetClass()->ImplementsInterface(UMotionTransferable::StaticClass()));
+    TestSamePtr(
+        TEXT("Actor-interface helper resolves the receiver Motion component"),
+        IMotionTransferable::CallGetMotionTransferComponent(ReceiverActor),
+        ReceiverMotion);
+
+    const FMotionTransferResult Capture = Player->TryCaptureFromComponent(Source);
+    TestTrue(TEXT("Actor-path capture succeeds"), Capture.bSucceeded);
+    FMotionState Carried;
+    TestTrue(TEXT("Player owns Motion after capture"), Player->TryGetMotionState(Carried));
+
+    FMotionTransferContext Context;
+    Context.bInRange = true;
+    Context.bOccluded = false;
+    Context.DirectionResolution = Resolution;
+    FMotionState ResolvedState = Carried;
+    ResolvedState.Direction = Resolution.WorldDirection.GetSafeNormal();
+
+    // Matching direction: the Actor-path Preview and Commit must both allow.
+    const FMotionCompatibilityResult MatchPreview =
+        IMotionTransferable::CallCanReceiveMotion(ReceiverActor, ResolvedState, Context);
+    TestTrue(TEXT("Actor-path Preview allows a matching direction"), MatchPreview.bAllowed);
+    TestEqual(
+        TEXT("Actor-path Preview matching rejection is None"),
+        MatchPreview.Rejection,
+        EMotionTransferRejection::None);
+
+    const FMotionTransferResult MatchTransfer =
+        Player->TryTransferToActor(ReceiverActor, Context);
+    TestTrue(TEXT("Actor-path Commit succeeds for a matching direction"), MatchTransfer.bSucceeded);
+    TestTrue(TEXT("Actor-path Commit consumes the matching state"), MatchTransfer.bConsumed);
+    TestFalse(TEXT("Player is empty after a matching Actor-path Commit"), Player->HasMotionState());
+    TestFalse(TEXT("Actor receiver stores nothing after consume"), ReceiverMotion->HasMotionState());
+
+    // Mismatching direction: Preview and Commit must reject with the same reason
+    // and neither may consume Player Motion.
+    Source->RestoreInitialState(false);
+    Player->RestoreInitialState(false);
+    const FMotionTransferResult SecondCapture = Player->TryCaptureFromComponent(Source);
+    TestTrue(TEXT("Second Actor-path capture succeeds"), SecondCapture.bSucceeded);
+    TestTrue(TEXT("Player owns Motion for the mismatch case"), Player->TryGetMotionState(Carried));
+
+    ReceiverMotion->RequiredCanonicalDirection = EMotionCanonicalDirection::Up;
+    ResolvedState = Carried;
+    ResolvedState.Direction = Resolution.WorldDirection.GetSafeNormal();
+
+    const FMotionCompatibilityResult MismatchPreview =
+        IMotionTransferable::CallCanReceiveMotion(ReceiverActor, ResolvedState, Context);
+    TestFalse(
+        TEXT("Actor-path Preview rejects a mismatching direction"),
+        MismatchPreview.bAllowed);
+    TestEqual(
+        TEXT("Actor-path Preview mismatch reason is IncompatibleDirection"),
+        MismatchPreview.Rejection,
+        EMotionTransferRejection::IncompatibleDirection);
+
+    const FMotionTransferResult MismatchTransfer =
+        Player->TryTransferToActor(ReceiverActor, Context);
+    TestFalse(
+        TEXT("Actor-path Commit rejects a mismatching direction"),
+        MismatchTransfer.bSucceeded);
+    TestEqual(
+        TEXT("Actor-path Commit mismatch reason matches Preview"),
+        MismatchTransfer.Rejection,
+        MismatchPreview.Rejection);
+    TestTrue(TEXT("Player keeps Motion after an Actor-path mismatch"), Player->HasMotionState());
+    TestFalse(TEXT("Actor receiver stays empty after mismatch"), ReceiverMotion->HasMotionState());
+
+    FMotionState Preserved;
+    TestTrue(TEXT("Player Motion remains queryable after mismatch"), Player->TryGetMotionState(Preserved));
+    TestEqual(TEXT("Mismatch preserves the carried Source identity"), Preserved.SourceId, State.SourceId);
+    TestTrue(
+        TEXT("Mismatch preserves the carried direction"),
+        Preserved.Direction.Equals(FVector::ForwardVector, 1e-3f));
+
+    ReleaseEndpointActor(ReceiverActor);
+    ReleaseResolver(Resolver);
+    ReleaseComponent(Player);
+    ReleaseComponent(Source);
     return true;
 }
 
