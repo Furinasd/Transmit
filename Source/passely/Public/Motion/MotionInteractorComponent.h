@@ -57,6 +57,14 @@ public:
         float NewRawScore,
         float InStickyBonus);
 
+    // Single authoritative outgoing-direction seam for both Preview and Commit.
+    // CameraCanonical delegates to the existing resolver; PreserveSource keeps
+    // the source-authored world direction carried by the Motion State.
+    static FMotionDirectionResolution ResolveTransferDirection(
+        const FMotionState& CarriedState,
+        const FRotator& CameraRotation,
+        UMotionCanonicalDirectionResolver* Resolver);
+
 protected:
     virtual void TickComponent(
         float DeltaTime,

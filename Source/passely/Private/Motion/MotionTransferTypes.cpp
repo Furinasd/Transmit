@@ -35,6 +35,17 @@ FMotionDirectionResolution FMotionDirectionResolution::Invalid()
     return Result;
 }
 
+FMotionDirectionResolution FMotionDirectionResolution::PreserveSource(
+    const FVector& InWorldDirection)
+{
+    FMotionDirectionResolution Result;
+    const FVector Normalized = InWorldDirection.GetSafeNormal();
+    Result.bValid = !Normalized.IsNearlyZero();
+    Result.CanonicalDirection = EMotionCanonicalDirection::None;
+    Result.WorldDirection = Normalized;
+    return Result;
+}
+
 FMotionDirectionResolution FMotionDirectionResolution::Make(
     const EMotionCanonicalDirection InCanonicalDirection,
     const FVector& InWorldDirection)

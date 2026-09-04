@@ -21,6 +21,19 @@ enum class EMotionEndpointMode : uint8
 };
 
 UENUM(BlueprintType)
+enum class EMotionDirectionPolicy : uint8
+{
+    // Ordinary Linear Motion: the gameplay camera quantizes the transferred
+    // direction through the existing six-direction canonical resolver.
+    CameraCanonical,
+
+    // Boss High Motion: the transferred direction is the source-authored
+    // world direction captured from the Charger Dash. It bypasses the camera
+    // resolver and is never re-authored by camera rotation or pitch.
+    PreserveSource
+};
+
+UENUM(BlueprintType)
 enum class EMotionTransferVerb : uint8
 {
     None,
@@ -82,6 +95,9 @@ struct PASSELY_API FMotionState
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Motion")
     FName SourceId = NAME_None;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Motion")
+    EMotionDirectionPolicy DirectionPolicy = EMotionDirectionPolicy::CameraCanonical;
+
     bool IsValid() const;
 };
 
@@ -100,6 +116,7 @@ struct PASSELY_API FMotionDirectionResolution
     FVector WorldDirection = FVector::ZeroVector;
 
     static FMotionDirectionResolution Invalid();
+    static FMotionDirectionResolution PreserveSource(const FVector& InWorldDirection);
     static FMotionDirectionResolution Make(
         EMotionCanonicalDirection InCanonicalDirection,
         const FVector& InWorldDirection);

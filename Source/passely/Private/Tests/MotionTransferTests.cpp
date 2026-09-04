@@ -718,6 +718,310 @@ bool FMotionActorPathDirectionConsistencyTest::RunTest(const FString& Parameters
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMotionDirectionPolicyOrdinaryCameraTest,
+    "Transmit.MotionTransfer.DirectionPolicyOrdinaryCamera",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMotionDirectionPolicyOrdinaryCameraTest::RunTest(const FString& Parameters)
+{
+    using namespace MotionTransferTests;
+
+    FMotionState State = MakeState(TEXT("Source.Linear.Ordinary"), 600.0f);
+    State.Direction = FVector::ForwardVector;
+    TestEqual(
+        TEXT("Ordinary Linear Motion defaults to CameraCanonical"),
+        State.DirectionPolicy,
+        EMotionDirectionPolicy::CameraCanonical);
+
+    UMotionCanonicalDirectionResolver* Resolver = MakeResolver();
+    const FRotator CameraYawZero(0.0f, 0.0f, 0.0f);
+    const FMotionDirectionResolution Forward =
+        UMotionInteractorComponent::ResolveTransferDirection(
+            State,
+            CameraYawZero,
+            Resolver);
+    TestTrue(TEXT("CameraCanonical resolves a valid direction"), Forward.bValid);
+    TestTrue(
+        TEXT("CameraCanonical resolves +X as Forward at yaw zero"),
+        Forward.CanonicalDirection == EMotionCanonicalDirection::Forward);
+
+    Resolver->ResetHysteresis();
+    const FRotator CameraYawRight(0.0f, 90.0f, 0.0f);
+    const FMotionDirectionResolution Yawed =
+        UMotionInteractorComponent::ResolveTransferDirection(
+            State,
+            CameraYawRight,
+            Resolver);
+    TestTrue(TEXT("CameraCanonical stays valid after camera yaw"), Yawed.bValid);
+    TestTrue(
+        TEXT("CameraCanonical canonical output changes with camera yaw"),
+        Yawed.CanonicalDirection == EMotionCanonicalDirection::Left
+            && Yawed.CanonicalDirection != Forward.CanonicalDirection);
+
+    Resolver->ResetHysteresis();
+    const FRotator CameraPitchUp(50.0f, 0.0f, 0.0f);
+    const FMotionDirectionResolution Pitched =
+        UMotionInteractorComponent::ResolveTransferDirection(
+            State,
+            CameraPitchUp,
+            Resolver);
+    TestTrue(TEXT("CameraCanonical stays valid after camera pitch"), Pitched.bValid);
+    TestTrue(
+        TEXT("CameraCanonical canonical output changes with camera pitch"),
+        Pitched.CanonicalDirection == EMotionCanonicalDirection::Up);
+    TestTrue(
+        TEXT("CameraCanonical world direction changes with camera pitch"),
+        Pitched.WorldDirection.Equals(FVector::UpVector, 1e-3f));
+
+    ReleaseResolver(Resolver);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMotionPreserveSourceDirectionPolicyTest,
+    "Transmit.MotionTransfer.DirectionPolicyPreserveSource",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMotionPreserveSourceDirectionPolicyTest::RunTest(const FString& Parameters)
+{
+    using namespace MotionTransferTests;
+
+    FMotionState DashState = MakeState(TEXT("Boss.Dash.001"), 1200.0f);
+    DashState.Direction = FVector::ForwardVector;
+    DashState.DirectionPolicy = EMotionDirectionPolicy::PreserveSource;
+    UMotionTransferComponent* Source = MakeComponent(
+        TEXT("Boss"),
+        true,
+        false,
+        EMotionEndpointMode::Store,
+        DashState);
+    UMotionTransferComponent* Player = MakeComponent(
+        TEXT("Player"),
+        false,
+        true,
+        EMotionEndpointMode::Store);
+    UMotionCanonicalDirectionResolver* Resolver = MakeResolver();
+
+    const FMotionTransferResult Capture = Player->TryCaptureFromComponent(Source);
+    TestTrue(TEXT("PreserveSource capture succeeds"), Capture.bSucceeded);
+    FMotionState Carried;
+    TestTrue(TEXT("Player owns PreserveSource Motion"), Player->TryGetMotionState(Carried));
+    TestEqual(
+        TEXT("Capture preserves the Dash direction policy"),
+        Carried.DirectionPolicy,
+        EMotionDirectionPolicy::PreserveSource);
+    TestTrue(
+        TEXT("Capture preserves the committed Dash world direction"),
+        Carried.Direction.Equals(FVector::ForwardVector, 1e-3f));
+
+    // Camera yaw and pitch after Capture must not re-author the preserved
+    // world direction. CanonicalDirection stays None because PreserveSource is
+    // not a camera-canonical result.
+    const FRotator CameraYawForward(0.0f, 0.0f, 0.0f);
+    const FRotator CameraYawBack(0.0f, 180.0f, 0.0f);
+    const FRotator CameraYawRight(0.0f, 90.0f, 0.0f);
+    const FRotator CameraYawLeft(0.0f, -90.0f, 0.0f);
+    const FRotator CameraHighPitch(50.0f, 45.0f, 0.0f);
+    const FRotator CameraLowPitch(-50.0f, -45.0f, 0.0f);
+    const TArray<FRotator> Cameras = {
+        CameraYawForward,
+        CameraYawBack,
+        CameraYawRight,
+        CameraYawLeft,
+        CameraHighPitch,
+        CameraLowPitch
+    };
+    for (const FRotator& Camera : Cameras)
+    {
+        const FMotionDirectionResolution Resolution =
+            UMotionInteractorComponent::ResolveTransferDirection(
+                Carried,
+                Camera,
+                Resolver);
+        TestTrue(TEXT("PreserveSource always resolves a valid direction"), Resolution.bValid);
+        TestTrue(
+            TEXT("PreserveSource never reports a camera-canonical direction"),
+            Resolution.CanonicalDirection == EMotionCanonicalDirection::None);
+        TestTrue(
+            TEXT("PreserveSource Preview world direction stays the Dash direction"),
+            Resolution.WorldDirection.Equals(FVector::ForwardVector, 1e-3f));
+    }
+
+    // Preview and Commit consume the same resolution result.
+    ATransmitMotionEndpointActor* ReceiverActor = MakeEndpointActor(
+        TEXT("Actor.Receiver.Boss"),
+        EMotionCanonicalDirection::None,
+        EMotionEndpointMode::ConsumeOnReceive);
+    TestNotNull(TEXT("Boss receiver actor was created"), ReceiverActor);
+    if (!ReceiverActor)
+    {
+        ReleaseResolver(Resolver);
+        ReleaseComponent(Player);
+        ReleaseComponent(Source);
+        return false;
+    }
+    UMotionTransferComponent* ReceiverMotion = ReceiverActor->Motion;
+    TestNotNull(TEXT("Boss receiver owns a Motion component"), ReceiverMotion);
+    if (!ReceiverMotion)
+    {
+        ReleaseEndpointActor(ReceiverActor);
+        ReleaseResolver(Resolver);
+        ReleaseComponent(Player);
+        ReleaseComponent(Source);
+        return false;
+    }
+
+    FMotionTransferContext Context;
+    Context.bInRange = true;
+    Context.bOccluded = false;
+    Context.DirectionResolution =
+        UMotionInteractorComponent::ResolveTransferDirection(
+            Carried,
+            CameraYawRight,
+            Resolver);
+    FMotionState ResolvedState = Carried;
+    ResolvedState.Direction = Context.DirectionResolution.WorldDirection.GetSafeNormal();
+
+    const FMotionCompatibilityResult MatchPreview =
+        IMotionTransferable::CallCanReceiveMotion(ReceiverActor, ResolvedState, Context);
+    TestTrue(TEXT("PreserveSource Preview allows the Ram-style receiver"), MatchPreview.bAllowed);
+    const FMotionTransferResult MatchTransfer =
+        Player->TryTransferToActor(ReceiverActor, Context);
+    TestTrue(TEXT("PreserveSource Commit succeeds"), MatchTransfer.bSucceeded);
+    TestTrue(TEXT("PreserveSource Commit consumes the state"), MatchTransfer.bConsumed);
+    TestTrue(
+        TEXT("Commit world direction equals Preview world direction"),
+        MatchTransfer.StateSnapshot.Direction.Equals(
+            Context.DirectionResolution.WorldDirection,
+            1e-3f));
+    TestEqual(
+        TEXT("Committed state keeps the PreserveSource policy"),
+        MatchTransfer.StateSnapshot.DirectionPolicy,
+        EMotionDirectionPolicy::PreserveSource);
+
+    // Rejected PreserveSource transfer preserves Player ownership.
+    Source->RestoreInitialState(false);
+    const FMotionTransferResult SecondCapture = Player->TryCaptureFromComponent(Source);
+    TestTrue(TEXT("Second PreserveSource capture succeeds"), SecondCapture.bSucceeded);
+    TestTrue(TEXT("Player owns Motion for rejection case"), Player->TryGetMotionState(Carried));
+
+    ATransmitMotionEndpointActor* UpReceiverActor = MakeEndpointActor(
+        TEXT("Actor.Receiver.Up"),
+        EMotionCanonicalDirection::Up,
+        EMotionEndpointMode::ConsumeOnReceive);
+    TestNotNull(TEXT("Up receiver actor was created"), UpReceiverActor);
+    if (!UpReceiverActor)
+    {
+        ReleaseEndpointActor(ReceiverActor);
+        ReleaseResolver(Resolver);
+        ReleaseComponent(Player);
+        ReleaseComponent(Source);
+        return false;
+    }
+    UMotionTransferComponent* UpReceiverMotion = UpReceiverActor->Motion;
+    TestNotNull(TEXT("Up receiver owns a Motion component"), UpReceiverMotion);
+    if (!UpReceiverMotion)
+    {
+        ReleaseEndpointActor(UpReceiverActor);
+        ReleaseEndpointActor(ReceiverActor);
+        ReleaseResolver(Resolver);
+        ReleaseComponent(Player);
+        ReleaseComponent(Source);
+        return false;
+    }
+
+    FMotionTransferContext MismatchContext;
+    MismatchContext.bInRange = true;
+    MismatchContext.bOccluded = false;
+    MismatchContext.DirectionResolution =
+        UMotionInteractorComponent::ResolveTransferDirection(
+            Carried,
+            CameraHighPitch,
+            Resolver);
+    ResolvedState = Carried;
+    ResolvedState.Direction = MismatchContext.DirectionResolution.WorldDirection.GetSafeNormal();
+
+    const FMotionCompatibilityResult MismatchPreview =
+        IMotionTransferable::CallCanReceiveMotion(
+            UpReceiverActor,
+            ResolvedState,
+            MismatchContext);
+    TestFalse(
+        TEXT("PreserveSource Preview rejects a RequiredCanonicalDirection target"),
+        MismatchPreview.bAllowed);
+    TestEqual(
+        TEXT("PreserveSource Preview rejection is IncompatibleDirection"),
+        MismatchPreview.Rejection,
+        EMotionTransferRejection::IncompatibleDirection);
+    const FMotionTransferResult MismatchTransfer =
+        Player->TryTransferToActor(UpReceiverActor, MismatchContext);
+    TestFalse(TEXT("PreserveSource Commit rejects the same target"), MismatchTransfer.bSucceeded);
+    TestEqual(
+        TEXT("PreserveSource Commit rejection matches Preview"),
+        MismatchTransfer.Rejection,
+        MismatchPreview.Rejection);
+    TestTrue(TEXT("Player keeps Motion after rejected PreserveSource Commit"), Player->HasMotionState());
+    FMotionState Preserved;
+    TestTrue(TEXT("Player Motion remains queryable after rejection"), Player->TryGetMotionState(Preserved));
+    TestEqual(
+        TEXT("Rejection preserves the PreserveSource policy"),
+        Preserved.DirectionPolicy,
+        EMotionDirectionPolicy::PreserveSource);
+    TestTrue(
+        TEXT("Rejection preserves the Dash world direction"),
+        Preserved.Direction.Equals(FVector::ForwardVector, 1e-3f));
+    TestFalse(
+        TEXT("Rejected target stays empty"),
+        UpReceiverMotion ? UpReceiverMotion->HasMotionState() : false);
+
+    // Reset removes stale Player policy/state and restores source snapshots.
+    TestTrue(TEXT("Player Reset succeeds"), Player->RestoreInitialState(false));
+    TestFalse(TEXT("Player has no Motion after Reset"), Player->HasMotionState());
+    TestTrue(TEXT("Source Reset succeeds"), Source->RestoreInitialState(false));
+    FMotionState RestoredSource;
+    TestTrue(TEXT("Source state is restored"), Source->TryGetMotionState(RestoredSource));
+    TestEqual(
+        TEXT("Reset restores the snapshotted PreserveSource policy"),
+        RestoredSource.DirectionPolicy,
+        EMotionDirectionPolicy::PreserveSource);
+
+    // A fresh ordinary capture after Reset must be camera-driven again: no
+    // stale PreserveSource leakage from the Player reset path.
+    FMotionState OrdinaryState = MakeState(TEXT("Source.Linear.AfterReset"), 600.0f);
+    OrdinaryState.Direction = FVector::ForwardVector;
+    UMotionTransferComponent* OrdinarySource = MakeComponent(
+        TEXT("OrdinarySource"),
+        true,
+        false,
+        EMotionEndpointMode::Store,
+        OrdinaryState);
+    const FMotionTransferResult OrdinaryCapture =
+        Player->TryCaptureFromComponent(OrdinarySource);
+    TestTrue(TEXT("Ordinary capture succeeds after Reset"), OrdinaryCapture.bSucceeded);
+    FMotionState OrdinaryCarried;
+    TestTrue(TEXT("Player owns ordinary Motion after Reset"), Player->TryGetMotionState(OrdinaryCarried));
+    Resolver->ResetHysteresis();
+    const FMotionDirectionResolution OrdinaryAfterReset =
+        UMotionInteractorComponent::ResolveTransferDirection(
+            OrdinaryCarried,
+            CameraYawRight,
+            Resolver);
+    TestTrue(
+        TEXT("Post-Reset ordinary Motion is camera-driven again"),
+        OrdinaryAfterReset.bValid
+            && OrdinaryAfterReset.CanonicalDirection
+                == EMotionCanonicalDirection::Left);
+
+    ReleaseComponent(OrdinarySource);
+    ReleaseEndpointActor(UpReceiverActor);
+    ReleaseEndpointActor(ReceiverActor);
+    ReleaseResolver(Resolver);
+    ReleaseComponent(Player);
+    ReleaseComponent(Source);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMotionChargerStateMachineTest,
     "Transmit.MotionTransfer.ChargerStateMachine",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -890,6 +1194,7 @@ bool FMotionChargerActorCaptureGateTest::RunTest(const FString& Parameters)
     Machine->DashCommitWindowDelaySeconds = 0.05f;
 
     FMotionState DashState = MakeState(TEXT("Charger.Dash.001"), 1200.0f);
+    DashState.DirectionPolicy = EMotionDirectionPolicy::PreserveSource;
     DashState.Direction = FVector::ForwardVector;
     TestTrue(
         TEXT("Charger starts the Dash window with high-magnitude Motion"),
@@ -963,6 +1268,10 @@ bool FMotionChargerActorCaptureGateTest::RunTest(const FString& Parameters)
         TEXT("Captured Charger Motion keeps its Source identity"),
         CapturedState.SourceId,
         TEXT("Charger.Dash.001"));
+    TestEqual(
+        TEXT("Captured Charger Motion keeps the PreserveSource direction policy"),
+        CapturedState.DirectionPolicy,
+        EMotionDirectionPolicy::PreserveSource);
 
     Machine->ForceRecovery();
     TestTrue(TEXT("Capture stops the Dash window"), !Machine->IsCaptureWindowOpen());

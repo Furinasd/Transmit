@@ -227,6 +227,21 @@ bool UMotionInteractorComponent::ShouldSwitchTarget(
     return NewRawScore > CurrentRawScore + FMath::Max(0.0f, InStickyBonus);
 }
 
+FMotionDirectionResolution UMotionInteractorComponent::ResolveTransferDirection(
+    const FMotionState& CarriedState,
+    const FRotator& CameraRotation,
+    UMotionCanonicalDirectionResolver* Resolver)
+{
+    if (CarriedState.DirectionPolicy == EMotionDirectionPolicy::PreserveSource)
+    {
+        return FMotionDirectionResolution::PreserveSource(CarriedState.Direction);
+    }
+
+    return Resolver
+        ? Resolver->ResolveDirection(CarriedState.Direction, CameraRotation)
+        : FMotionDirectionResolution::Invalid();
+}
+
 UMotionTransferComponent* UMotionInteractorComponent::ResolvePlayerMotionComponent() const
 {
     AActor* Owner = GetOwner();
@@ -369,9 +384,10 @@ UMotionInteractorComponent::FCandidateEvaluation UMotionInteractorComponent::Eva
         FMotionState CarriedState;
         PlayerMotion->TryGetMotionState(CarriedState);
         const FMotionDirectionResolution Resolution =
-            DirectionResolver
-                ? DirectionResolver->ResolveDirection(CarriedState.Direction, ViewRotation)
-                : FMotionDirectionResolution();
+            UMotionInteractorComponent::ResolveTransferDirection(
+                CarriedState,
+                ViewRotation,
+                DirectionResolver);
         Evaluation.CanonicalDirection = Resolution.CanonicalDirection;
         Evaluation.ProjectedWorldDirection = Resolution.WorldDirection;
         Evaluation.bHasProjectedDirection = Resolution.bValid;

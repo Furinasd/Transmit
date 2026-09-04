@@ -213,6 +213,7 @@ void ATransmitChargerActor::GrantDashMotionState()
 {
     FMotionState DashState;
     DashState.Type = EMotionType::Linear;
+    DashState.DirectionPolicy = EMotionDirectionPolicy::PreserveSource;
     DashState.Direction = DashDirection.GetSafeNormal();
     DashState.Magnitude = DashMotionMagnitude;
     DashState.SourceId = DashSourceId;
