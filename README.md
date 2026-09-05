@@ -9,20 +9,20 @@
 | 项目 | 当前状态 |
 | --- | --- |
 | 当前本地工具链 | Unreal Engine 5.8（最近一次本地检查为 5.8.1；EngineAssociation 属于工作站本地差异，不是项目版本号） |
-| 当前阶段 | Final v0.4 design lock 已提升（docs-only）；runtime 窄差异未实现 |
-| 当前实现 | EXP-001 闭环 + v0.3 Canonical Direction Resolver / Preview=Commit / Charger Core（checkpoint `1fb96ea`）；Directional Carrier 与 Boss direction lock 为已提升未实现 |
-| 核心目标 | 先完成 v0.4 窄差异（Directional Carrier / Re-capture、Boss High Motion direction lock），再进入唯一正式图 `L_Transmit`（Learn → Route → Weaponize） |
+| 当前阶段 | Final v0.4 runtime closure 进行中；Boss High Motion direction lock 与 Directional Carrier 已进入 HEAD，fresh build / PIE 仍待验证 |
+| 当前实现 | EXP-001 闭环 + Actor-path Preview=Commit 修复 + Ordinary Linear CameraCanonical + Charger PreserveSource direction policy + Directional Carrier actor/tests（HEAD `d9b8c4a`） |
+| 核心目标 | 完成 v0.4 runtime closure（Carrier fixtures / fresh validation，以及 Boss lock 的 fresh validation），再进入唯一正式图 `L_Transmit`（Learn → Route → Weaponize） |
 | 版本管理 | Git + Git LFS |
 
 > [!IMPORTANT]
-> **Final v0.4 design lock promoted；runtime closure pending**：普通 Linear 继续使用 CameraCanonical 六向 reroute；Directional Carrier（world-space movement / swept blocking stop / re-capture / Reset）与 Boss High Motion direction lock（保留 Dash 世界方向、bypass CameraCanonical、Preview = Commit）已提升到契约但**尚未实现**。`L_Transmit` 是唯一正式 playable（未来内容），`L_TestChamber` 只做回归验证。
+> **Final v0.4 runtime closure in progress**：普通 Linear 继续使用 CameraCanonical 六向 reroute；Actor-path Preview=Commit 的方向透传修复、Boss High Motion 的 PreserveSource direction policy，以及 Directional Carrier actor/tests 已进入 HEAD。Carrier 包含 Actor 本体 world-space movement、swept blocking stop、re-capture 与 Reset hooks；当前仍未完成 fresh build / automation / PIE 验证。`L_Transmit` 仍是唯一正式 playable 的未来内容，`L_TestChamber` 只做回归验证。
 
 ## 仓库分支
 
 | 分支 | 用途与状态 |
 | --- | --- |
 | `main` | 稳定基线：已合入并关闭的 EXP-001 工程验证 |
-| `feat/gameplay-core-v03` | 当前 gameplay 开发线；v0.3 core checkpoint（`1fb96ea`）与 Final v0.4 文档提升 |
+| `feat/gameplay-core-v03` | 当前 gameplay 开发线；HEAD `d9b8c4a` 已包含 v0.4 direction-policy 与 Directional Carrier runtime delta |
 | `BP_LD_BeatMarker` | 关卡设计 BeatMarker 工具线；已推送并保存在远端，作为工具记录独立保留 |
 
 日常 gameplay 工作在 `feat/gameplay-core-v03` 进行。工具或实验内容需要单独保存时，请直接推送独立命名的远端分支，不要再派生 `-local` 副本，避免本地与远端分支漂移。
@@ -55,7 +55,7 @@
 ```text
 Transmit/
 ├─ Config/                 # 项目默认配置、输入与启动地图
-├─ Source/passely/         # EXP-001 Motion 核心 C++：状态、事务、接口、Reset、自动化测试
+├─ Source/passely/         # Motion 核心 C++：状态、事务、接口、Reset、方向策略、Carrier 与自动化测试
 ├─ Content/
 │  ├─ ThirdPerson/         # 当前角色、GameMode 与入口关卡
 │  ├─ Transmit/            # EXP-001 输入、蓝图与 L_TestChamber
@@ -115,18 +115,18 @@ Source 恢复快照，Player / Receiver 清空
 - 房间 Reset：20/20 连续循环通过，`participants=3, success=true`，无重复/丢失 Motion State。
 - 入口：`/Game/Transmit/Maps/L_TestChamber`（编辑器启动图仍为模板 `Lvl_ThirdPerson`）。
 
-## Final v0.4 目标闭环（已提升，未实现）
+## Final v0.4 runtime closure（部分已实现）
 
 ```text
 Source → Capture → Directional Carrier → geometry-constrained motion
-        → Re-capture → Ram Rail → Boss Dash → Capture High Motion
+        → Re-capture → Re-route → Arm Ram → Boss Dash → Capture High Motion
         → Ram Impact → Gate Break
 ```
 
 - 正式 Demo 为单张 `L_Transmit`：Zone 1 Learn → Zone 2 Route → Zone 3 Weaponize；不再生产三张独立关卡。
-- Directional Carrier 需把普通 Linear 六向输出变成 Actor 本体 world-space 位移，swept collision 撞停后可再次 Capture，Reset 恢复。
-- Boss High Motion 需锁定 committed Dash vector，Transfer 不被 camera 改写，Preview 与 Commit 一致。
-- 上述能力与 `L_Transmit` 均尚无仓库 runtime / content 证据。
+- Boss High Motion 已在 HEAD 通过 `PreserveSource` policy 锁定 committed Dash world direction；Transfer bypass CameraCanonical，Preview 与 Commit 使用同一 resolved world direction。对应代码路径与测试用例已存在，当前仍缺 fresh build / automation / PIE 执行证据。
+- Directional Carrier 的 C++ actor、world-space movement、swept blocking stop、moving Carrier re-capture / stop、Reset hooks 与对应测试已在 HEAD `d9b8c4a`；尚未取得当前源码的编译结果、接入 `L_TestChamber` 或完成 PIE。
+- `L_Transmit` 与 Ram Block / Gate Break 等正式 content 仍无仓库 runtime / content 证据。
 
 ## 运行项目
 
@@ -156,21 +156,23 @@ git lfs pull
 
 | 检查项 | 结果 | 证据边界 |
 | --- | --- | --- |
-| UE 5.8.1 编辑器启动 | 已观察通过 | 本地日志记录成功初始化 |
-| 当前地图检查 | 0 error / 0 warning | 本地编辑器日志 |
-| Blueprint 批量编译 | 0 error / 0 warning / 0 load failure | 编译本身完成；进程因本机 DDC/Zen 无可写节点返回 1 |
+| UE 5.8.1 编辑器启动 | 历史观察通过 | 本地日志记录成功初始化；不是当前 HEAD 的 fresh rerun |
+| 当前地图检查 | 历史 0 error / 0 warning | 本地编辑器日志；当前 v0.4 内容尚未接入地图 |
+| Blueprint 批量编译 | 历史 0 error / 0 warning / 0 load failure | 编译本身完成；进程因本机 DDC/Zen 无可写节点返回 1；当前 HEAD 未 fresh rerun |
 | EXP-001 可玩闭环（PIE） | 历史通过 | Capture / Transfer / Consume 成功，E/Q/R 可用（2026-08-30，旧 baseline） |
-| 20/20 Room Reset | 历史通过 | PIE 自动化 R 键 + 状态校验（`Saved/Logs/passely.log`，2026-08-30） |
-| v0.3 / Gate A Core 自动化 | 历史 10/10 通过 | Resolver / Preview=Commit / Charger FSM、Actor-path Capture 与结构门禁等；当前 HEAD 需 fresh rerun |
-| Directional Carrier（v0.4） | 未实现 | 无 actor / movement / collision / re-capture / Reset 证据 |
-| Boss High Motion direction lock（v0.4） | 未实现 | 无 policy seam；Capture 后仍走 camera reroute |
+| 20/20 Room Reset | 历史通过 | PIE 自动化 R 键 + 状态校验（`Saved/Logs/passely.log`，2026-08-30）；当前 v0.4 工作区需 fresh rerun |
+| `Transmit.MotionTransfer` 自动化 | 历史 10/10 通过 | 旧 source-aligned 日志；当前 HEAD / 工作区需 fresh rerun |
+| 当前 automation test declarations | 16 项 | 源码已声明普通方向、PreserveSource、Carrier 与 Charger 测试；当前 pass/fail 未取得 |
+| 当前 `passelyEditor` 构建 | 未验证 | 当前 HEAD 的 fresh build 证据尚未记录 |
+| Directional Carrier（v0.4） | 代码与测试已在 HEAD，未验证 | actor / movement / collision / re-capture / Reset 代码和测试存在；未取得当前源码的 build 结果、未接入地图、未 PIE |
+| Boss High Motion direction lock（v0.4） | 代码与测试已在 HEAD，未 fresh 验证 | `PreserveSource` policy seam、Charger Dash 标记与测试存在；当前仍需 build / automation / PIE |
 | `L_Transmit` 单图（v0.4） | 未来内容 | 地图不存在 |
 | human readability / 首次玩家理解 | 未验证 | 尚未执行首次玩家盲测 |
-| Build / Packaging / 跨平台 | 部分验证 | Win64 Editor Development 与 macOS Editor module 已构建；打包和最终 Win64 release authority 尚未验证 |
+| Build / Packaging / 跨平台 | 部分历史验证 | Win64 Editor Development 与 macOS Editor module 曾构建；当前源码 fresh build、打包和最终 Win64 release authority 尚未验证 |
 
 ## 开发路线（Final v0.4）
 
-1. **v0.4 runtime 窄差异（尚未开始）**：修复 Actor-path Preview 方向透传；在 Motion 上增加显式 direction policy；实现 Directional Carrier；Boss Dash Capture 授予 direction-locked High Motion。
+1. **完成 v0.4 runtime closure**：为 HEAD 的 Directional Carrier 完成 fresh build / automation，修复任何编译问题，并将 Carrier / Boss fixtures 接入 `L_TestChamber` 后执行 PIE。
 2. **`L_TestChamber` 验证矩阵**：普通六向回归、Carrier movement / collision stop / re-capture / Reset、Boss direction-lock Preview = Commit、多轮 Reset。
 3. **单张 `L_Transmit`**：Zone 1 Learn（Bridge Slab / traversal change）→ Zone 2 Route（Carrier relay / re-capture / Arm Ram）→ Zone 3 Weaponize（Boss High Motion → Ram → two-hit Gate Break）。
 4. **Presentation / 验收**：lighting / composition / route readability / camera / juice，随后首次玩家 human playtest。
@@ -179,7 +181,7 @@ L1 / L2 / L3 只作为单图内的 progression ID，不再对应三张独立 `.u
 
 ## Next
 
-- **Runtime closure（独立后续 commit）**：Directional Carrier / Re-capture 与 Boss High Motion direction lock 的 P0 窄差异，以及 Actor-path Preview 一致性修复。
+- **Runtime closure（HEAD `d9b8c4a` → 独立验证/内容工作）**：Directional Carrier / Re-capture 的 `L_TestChamber` fixtures 与 fresh validation；Boss High Motion direction lock 与 Actor-path Preview 一致性修复已在 HEAD，仍需 fresh validation。
 - **Production**：runtime gate 通过后创建唯一正式图 `L_Transmit`；`L_TestChamber` 保持回归用途。
 - **Gameplay Coverage**：首次玩家理解测试，以及瞄准、遮挡、不兼容和拒绝路径的人工可读性检查。
 
