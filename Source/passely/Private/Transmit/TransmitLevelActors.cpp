@@ -1,6 +1,8 @@
 #include "Transmit/TransmitLevelActors.h"
 
 #include "Components/BoxComponent.h"
+#include "Components/PointLightComponent.h"
+#include "Components/ArrowComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SceneComponent.h"
@@ -67,6 +69,11 @@ void ATransmitRam::Tick(const float DeltaSeconds)
     Super::Tick(DeltaSeconds);
 
     LatchArmIfReady();
+    // Arming is a spatial event; expose it at the device before any UI request.
+    MotionIndicator->SetVisibility(bArmed);
+    MotionIndicator->SetLightColor(FLinearColor(0.05f, 0.9f, 0.65f));
+    DirectionIndicator->SetVisibility(bArmed && Hits < 2);
+    DirectionIndicator->SetWorldRotation(FixedAxis.Rotation());
 
     if (!bInFlightImpact)
     {
@@ -595,7 +602,7 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
                 -1,
                 6.0f,
                 FColor::Green,
-                FString::Printf(TEXT("Gate broken - arena clear (%.1fs)"), Elapsed));
+                TEXT("TRANSMITTED"));
         }
     }
 }
