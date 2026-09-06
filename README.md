@@ -9,7 +9,7 @@
 | 项目 | 当前状态 |
 | --- | --- |
 | 当前本地工具链 | Unreal Engine 5.8（最近一次本地检查为 5.8.1；EngineAssociation 属于工作站本地差异，不是项目版本号） |
-| 当前阶段 | `L_Transmit` 完整体验制作与视觉集成，等待最终候选验证 |
+| 当前阶段 | `L_Transmit` 完整候选已整合、打包，等待 Ely 体验裁决 |
 | 当前实现 | Learn → Route → Weaponize 连续主图、分步目标、局部重试、CameraCanonical / PreserveSource 与两次撞门 |
 | 核心目标 | 可直接试玩、录制的完整候选；Ely 验收整体体验 |
 | 版本管理 | Git + Git LFS |
@@ -144,7 +144,7 @@ git lfs pull
 
 ## 验证与打包
 
-本轮已取得 Mac Editor/Game build、25/25 automation、角色真实运动与 Interactor 驱动的连续通关和失败恢复证据，并完成早期 Mac 独立包启动。视觉整合后的最终回归仍在进行；完整细节和适用版本见 [`Docs/STATE.md`](Docs/STATE.md)。脚本通关秒数不代表真人体验时长，编译通过也不等于 Details/可读性验收。
+候选内容版本 `ea081ff` 已完成 Mac Editor/Game build、25/25 automation、整合视觉与肩侧镜头后的连续 PIE 通关和失败恢复，并生成完整 Mac 独立包，实际验证 R/E/Q/Backspace 开场交互。独立包完整真人通关仍待验收；细节和适用版本见 [`Docs/STATE.md`](Docs/STATE.md)。脚本通关秒数不代表真人体验时长，编译通过也不等于 Details/可读性验收。
 
 本地 Mac 候选打包：
 

@@ -112,3 +112,10 @@ Live flow validation in progress.
 - Fresh Editor process reloaded 123 formal-map actors, eight cable references and the serialized camera. Five Blueprints compiled BS_UP_TO_DATE; Map Check 0 errors/0 warnings. Fresh PIE instance confirmed SocketOffset (0,70,50). Evidence `/private/tmp/transmit-final-reload.log`.
 - Full Details/inline-struct edit-save-reopen authoring smoke remains a human gate. Rig selection/Details generation was observed, but native coordinate control did not reliably reach nested fields. API save/reopen and builds are not a substitute.
 - Final Mac packaging/launch evidence will follow against the A3 content commit. No Win64 validation or human experience acceptance is claimed.
+
+## Final package — A3
+
+- `Saved/LTransmitCandidate/ea081ff-Mac/Transmit.app`, packaged from clean `ea081ff8364f518c4301aff390b8fe05f07cdf21`; BuildCookRun 56.42 s, exit 0, complete Stage and signature verification passed.
+- Independently launched final app with Metal SM6; native R/E/Q/Backspace visibly performed opening reset, capture, bridge transfer/movement and restoration. Full standalone completion remains human verification; matching PIE clean/recovery evidence is listed above.
+- Final documentation-only commit records delivery and does not invalidate the content package. B independently checked A3 screenshots and runtime JSON before closing its work.
+- Candidate ready; Ely owns complete experience, pacing, sound mix and visual acceptance. Full nested Details/inherited authoring smoke is also open. Stop implementation here.

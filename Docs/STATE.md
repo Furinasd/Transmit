@@ -2,32 +2,42 @@
 
 > Operational snapshot, not design authority. Gameplay rules live in `DESIGN_CONTRACT.md`; architecture lives in `ARCHITECTURE.md`. Historical evidence remains in `Docs/dev/` and Git.
 
-Last inspected: 2026-09-06, L_Transmit candidate production in progress.
+Last inspected: 2026-09-06, integrated candidate ready for Ely's experience review.
 
 ## Current truth
 
-- Active integration line: `Jason/L_Transmit_v01`, baseline `bf1d0aa`; A1 flow/layout commit `58aa225`, B1 material/audio integration `bb7d1ac`.
-- Formal map and default Editor/game startup: `/Game/Transmit/Maps/L_Transmit`.
-- Learn → Route → Weaponize now has real bridge traversal, +X send/chase/re-capture, +Y relay docking, armed Ram, two captured Charger impacts and an exit/completion state.
-- Objective HUD and Backspace local retry are implemented. R remains full restart. Core Motion ownership, atomic rejection, CameraCanonical and High Motion PreserveSource remain intact.
-- Dedicated B presentation is being integrated; B1 palette/audio assets are present. B2 runtime rig/assembly is pending. Current map is not yet the final visual candidate.
+- Integration line: `Jason/L_Transmit_v01`. Candidate content: `ea081ff`; starting baseline `bf1d0aa`.
+- B1 `16b9e8d` / B2 `dfedd6b` are integrated as `bb7d1ac` / `9b2ec1c`; B evidence update is `903c724`.
+- Formal Editor/game startup: `/Game/Transmit/Maps/L_Transmit`.
+- Complete Learn → Route → Weaponize: bridge traversal, +X send/chase/re-capture, +Y docking, armed Ram, two captured Charger impacts, open exit and completion.
+- Objective HUD, impact observation, Backspace local retry and R full restart are active. Core single ownership, atomic rejection preservation, CameraCanonical and High Motion PreserveSource remain unchanged.
+- Formal map now consumes B's ceramic/graphite/motion palette, original mechanical audio and runtime Presentation Rig. A adds authored cable corners, guide/material hierarchy, a gate-facing Ram approach and shoulder camera.
 
-## Evidence already obtained
+## Verified evidence
 
-- Mac Editor build succeeded for A1 and later flow fixes/HUD revision.
-- A1 `Transmit` automation: 25/25 passed, `Saved/LTransmitEvidence/A1Tests/index.json`.
-- Actual CharacterMovement/Interactor clean traversal reached completion (52.665 game seconds): `Saved/LTransmitEvidence/run-1788695227.json`.
-- Failure-injected traversal passed Route fall, Charger collision after first impact, retained progress, completion and repeated full Reset: `Saved/LTransmitEvidence/run-1788695391.json`.
-- Those runtime runs precede final flow fixes and end-frame geometry. Integrated runtime recheck is required; script time is not a human playtime measurement.
-- Early Mac Development Build/Cook/Stage passed. A complete 1.0 GB staged `.app` copy independently launched the formal map using Metal SM6; native R/E input was observed. This early package predates B2 and is not the final delivery.
+- Mac Editor/Game build and final Build/Cook/IoStore Stage passed. Final package completed in 56.42 seconds from clean `ea081ff`; signature verification passed.
+- Final Transmit automation: 25 passed, zero warnings/failures/not-run, `Saved/LTransmitEvidence/CandidateTests/index.json`.
+- Clean saved-camera traversal: `run-1788699847.json`, actual CharacterMovement and MotionInteractor, no teleports or resource injection, completion in 66.342 game seconds. This is not human playtime.
+- Runtime images: `Saved/LTransmitEvidence/candidate-1788699780/`, opening to completion, with first/second impact and delayed reaction frames.
+- Failure recovery: `run-1788699643.json` covers Route fall, actual Charger collision after hit one, preserved progress, safe retry after gate opens, completion and repeated R.
+- Full R during Ram stroke (`run-1788699252.json`) and external Route-resource owner fallback (`run-1788699339.json`) restore exactly the initial unique resources.
+- Native Backspace at Route (`run-1788699903.json`) retained the completed bridge and restored the local source/carrier/player correctly.
+- Fresh Editor process reloaded 123 actors, eight cable anchors and saved camera (0,70,50). Five Blueprints compiled BS_UP_TO_DATE; Map Check 0 errors/0 warnings. Fresh PIE instance confirmed camera serialization.
+- Final standalone Mac app independently rendered L_Transmit with Metal SM6 and integrated presentation. Native R → E capture → Q bridge transfer/movement → Backspace restoration was observed through the actual window. Full standalone traversal is still a human check; the continuous completion evidence above is PIE.
 
-## Current validation work
+## Candidate entry
 
-1. Integrate B2 into the formal map through actor references, retain A map ownership.
-2. Run clean traversal and failure recovery on the integrated map, including post-open-gate Backspace and full Reset during a Ram stroke.
-3. Check the backtracking case where the Bridge owns the Route resource: local retry must choose full Reset and leave exactly one owner per original resource.
-4. Reopen assets, Blueprint compile, Map Check, and inspect the changed reflection/Details authoring surface.
-5. Capture continuous runtime images and rebuild/launch the final Mac candidate; inspect its actual startup and playable flow.
+`Saved/LTransmitCandidate/ea081ff-Mac/Transmit.app`
+
+Double-click the local Mac app. WASD move, mouse aim, Space jump, E capture, Q transfer, Backspace retry the current area, R restart. The app is a local Development candidate, not a notarized public distribution. No Win64 package was produced.
+
+The candidate directory contains `package.log`, `source-head.txt`, `source-status.txt` (clean at packaging) and `PLAYTEST.md`. Final documentation-only commits do not change the packaged gameplay/assets.
+
+## Changed binary assets
+
+A: `Content/Transmit/Maps/L_Transmit.umap` and `Content/Transmit/Blueprints/BP_TransmitCharacter.uasset` (existing camera boom SocketOffset only).
+
+B: five materials (`M_Ceramic`, `M_Graphite`, `M_Impact`, `M_Inlay`, `M_Motion`), eight SoundWaves (`Capture`, `Complete`, `Dock`, `Intercept`, `RamImpact1`, `RamImpact2`, `Telegraph`, `Transfer`) under `Content/Transmit/Presentation/`, plus `Maps/L_PresentationPreview.umap`. Total: 16 binary assets compared with the task baseline. B's preview map is not the playable entry.
 
 ## Packaging
 
@@ -40,6 +50,6 @@ UAT's early `-archive` output omitted the bundle's `Contents/UE` data despite re
 ## Human gates and limitations
 
 - Ely still judges complete player understanding, pacing, readability, camera, feel, audio balance and visual acceptance. The 5–7 minute experience remains a hypothesis.
-- Editor authoring surface validation is pending; build/tests do not certify Details generation or save/reopen behavior.
+- Rig selection and Details generation were observed. Full nested-struct/inline authoring edit → save → reopen remains unverified because native coordinate control did not reliably address those fields. Check Director/Ram exposed fields, Rig Cues and inherited Blueprint defaults in Editor; API reload/build/Map Check do not close this gate.
 - Only local macOS delivery is being validated. No current Win64 package or cross-platform compatibility claim.
-- Integration details, ownership and ready batches: `Handoff/A_LevelFlow.md` and B's separate-worktree `Handoff/B_Visual.md`.
+- Integration details, evidence and ownership: `Handoff/A_LevelFlow.md` and `Handoff/B_Visual.md`. No additional implementation is scheduled before Ely reviews the candidate.
