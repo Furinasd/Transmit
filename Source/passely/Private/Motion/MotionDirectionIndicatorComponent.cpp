@@ -12,16 +12,14 @@
 
 namespace
 {
-    constexpr float IndicatorLengthScaleDivisor = 400.0f;
-    constexpr float IndicatorMinLengthScale = 1.0f;
-    constexpr float IndicatorMaxLengthScale = 3.0f;
-    constexpr float IndicatorRadiusScale = 0.5f;
+    constexpr float IndicatorLength = 48.0f;
+    constexpr float IndicatorFaceClearance = 8.0f;
     constexpr float IndicatorGroundOffsetZ = 8.0f;
     constexpr float IndicatorDistanceFromOwner = 110.0f;
 
     const FLinearColor DefaultDirectionColor(0.05f, 0.8f, 1.0f);
-    const FLinearColor IndicatorTransferReadyColor(0.0f, 1.0f, 0.35f);
-    const FLinearColor IndicatorDirectionMismatchColor(1.0f, 0.15f, 0.05f);
+    const FLinearColor IndicatorTransferReadyColor(0.25f, 0.9f, 0.55f);
+    const FLinearColor IndicatorDirectionMismatchColor(0.95f, 0.3f, 0.22f);
 }
 
 UMotionDirectionIndicatorComponent::UMotionDirectionIndicatorComponent()
@@ -39,21 +37,20 @@ UMotionDirectionIndicatorComponent::UMotionDirectionIndicatorComponent()
         CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RuntimeIndicatorMesh"));
     InitializeRuntimeIndicatorMesh(RuntimeIndicatorMesh);
 
-    static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeMesh(
-        TEXT("/Engine/BasicShapes/Cone.Cone"));
-    if (ConeMesh.Succeeded())
+    static ConstructorHelpers::FObjectFinder<UStaticMesh> ArrowMesh(
+        TEXT("/Engine/InteractiveToolsFramework/Meshes/GizmoArrowHandle.GizmoArrowHandle"));
+    if (ArrowMesh.Succeeded())
     {
-        RuntimeIndicatorMesh->SetStaticMesh(ConeMesh.Object);
+        RuntimeIndicatorMesh->SetStaticMesh(ArrowMesh.Object);
     }
 
-    // The Engine BasicShapes Cone mesh itself references DefaultMaterial,
-    // which has no Color parameter. Use BasicShapeMaterial so the runtime
-    // dynamic instance can actually tint the cone (green/red/debug cyan).
-    static ConstructorHelpers::FObjectFinder<UMaterialInterface> BasicShapeMaterial(
-        TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
-    if (BasicShapeMaterial.Succeeded())
+    // Runtime ToolsFramework material keeps a self-occluded arrow legible,
+    // dimmed on the far face. Occluded targets still hide the preview entirely.
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> IndicatorMaterial(
+        TEXT("/Engine/InteractiveToolsFramework/Materials/GizmoComponentMaterial.GizmoComponentMaterial"));
+    if (IndicatorMaterial.Succeeded())
     {
-        RuntimeIndicatorMesh->SetMaterial(0, BasicShapeMaterial.Object);
+        RuntimeIndicatorMesh->SetMaterial(0, IndicatorMaterial.Object);
     }
 }
 
@@ -72,6 +69,14 @@ void UMotionDirectionIndicatorComponent::OnRegister()
 void UMotionDirectionIndicatorComponent::BeginPlay()
 {
     Super::BeginPlay();
+
+    // Existing Blueprint SCS templates may still serialize the former cone and
+    // material. Replace only this runtime presentation, without resaving assets.
+    RuntimeIndicatorMesh->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,
+        TEXT("/Engine/InteractiveToolsFramework/Meshes/GizmoArrowHandle.GizmoArrowHandle")));
+    RuntimeIndicatorMesh->SetMaterial(0, LoadObject<UMaterialInterface>(nullptr,
+        TEXT("/Engine/InteractiveToolsFramework/Materials/GizmoComponentMaterial.GizmoComponentMaterial")));
+    DirectionMaterial = nullptr;
 
     AActor* Owner = GetOwner();
     if (Owner)
@@ -252,32 +257,98 @@ void UMotionDirectionIndicatorComponent::RefreshFromOwner()
         return;
     }
 
-    FVector IndicatorLocation = Target->GetActorLocation();
-    const FBox TargetBounds = Target->GetComponentsBoundingBox(true);
-    if (TargetBounds.IsValid)
+    // Physical meshes only: a target's arrows/lights must not push the cue away
+    // from its surface. This also follows animated Source bodies, not the pivot.
+    FBox TargetBounds(ForceInit);
+    const UStaticMeshComponent* BodyMesh = nullptr;
+    double LargestMeshVolume = -1.0;
+    TInlineComponentArray<UStaticMeshComponent*> Meshes;
+    Target->GetComponents(Meshes);
+    for (const UStaticMeshComponent* Mesh : Meshes)
     {
-        IndicatorLocation = TargetBounds.GetCenter();
-        IndicatorLocation.Z = TargetBounds.Max.Z + ReceiverPreviewHoverHeight;
+        if (!Mesh->GetStaticMesh() || !Mesh->IsVisible() || Mesh->bHiddenInGame)
+        {
+            continue;
+        }
+        bool bIndicatorMesh = false;
+        for (const USceneComponent* Parent = Mesh->GetAttachParent(); Parent;
+            Parent = Parent->GetAttachParent())
+        {
+            if (Parent->IsA<UArrowComponent>())
+            {
+                bIndicatorMesh = true;
+                break;
+            }
+        }
+        if (!bIndicatorMesh)
+        {
+            const double Volume = Mesh->Bounds.GetBox().GetVolume();
+            if (Volume > LargestMeshVolume)
+            {
+                LargestMeshVolume = Volume;
+                BodyMesh = Mesh;
+            }
+        }
     }
+    const FTransform BoundsToWorld = BodyMesh
+        ? BodyMesh->GetComponentTransform() : FTransform::Identity;
+    TargetBounds = BodyMesh
+        ? BodyMesh->GetStaticMesh()->GetBoundingBox() : Target->GetComponentsBoundingBox(false);
+    const FVector IndicatorLocation = TargetBounds.IsValid
+        ? CalculateFaceAnchor(TargetBounds, DisplayDirection, IndicatorFaceClearance, BoundsToWorld)
+        : Target->GetActorLocation() + DisplayDirection * IndicatorFaceClearance;
     SetWorldLocation(IndicatorLocation);
 
     ShowDirection(DisplayDirection, State.Magnitude);
+}
+
+FVector UMotionDirectionIndicatorComponent::CalculateFaceAnchor(
+    const FBox& TargetBounds, const FVector& Direction, const float Clearance,
+    const FTransform& BoundsToWorld)
+{
+    const FVector WorldDirection = Direction.GetSafeNormal();
+    const FVector SafeDirection = BoundsToWorld.InverseTransformVector(WorldDirection).GetSafeNormal();
+    if (!TargetBounds.IsValid)
+    {
+        return FVector::ZeroVector;
+    }
+    const FVector Extent = TargetBounds.GetExtent();
+    double DistanceToFace = TNumericLimits<double>::Max();
+    for (int32 Axis = 0; Axis < 3; ++Axis)
+    {
+        if (FMath::Abs(SafeDirection[Axis]) > KINDA_SMALL_NUMBER)
+        {
+            DistanceToFace = FMath::Min(DistanceToFace,
+                Extent[Axis] / FMath::Abs(SafeDirection[Axis]));
+        }
+    }
+    if (SafeDirection.IsNearlyZero())
+    {
+        return BoundsToWorld.TransformPosition(TargetBounds.GetCenter());
+    }
+    // Intersect in mesh space so rotated/non-uniformly scaled bodies do not
+    // anchor the arrow on empty space at the edge of their world AABB.
+    return BoundsToWorld.TransformPosition(TargetBounds.GetCenter() + SafeDirection * DistanceToFace)
+        + WorldDirection * FMath::Max(0.0f, Clearance);
 }
 
 void UMotionDirectionIndicatorComponent::ApplyDirectionVisual(
     const FVector& Direction,
     const float Magnitude)
 {
-    // The Engine BasicShapes cone is authored with its apex along local +Z, so
-    // align local Z with the world-space direction that the indicator shows.
-    SetWorldRotation(FRotationMatrix::MakeFromZ(Direction.GetSafeNormal()).Rotator());
-
-    const float LengthScale = FMath::Clamp(
-        Magnitude / IndicatorLengthScaleDivisor,
-        IndicatorMinLengthScale,
-        IndicatorMaxLengthScale);
-    RuntimeIndicatorMesh->SetRelativeScale3D(
-        FVector(IndicatorRadiusScale, IndicatorRadiusScale, LengthScale));
+    // GizmoArrowHandle is a runtime Engine mesh authored from its tail along +X.
+    SetWorldRotation(FRotationMatrix::MakeFromX(Direction.GetSafeNormal()).Rotator());
+    SetWorldScale3D(FVector::OneVector);
+    const UStaticMesh* Mesh = RuntimeIndicatorMesh->GetStaticMesh();
+    if (!Mesh)
+    {
+        return;
+    }
+    const FBox LocalBounds = Mesh->GetBoundingBox();
+    const float Length = IndicatorLength * FMath::Clamp(Magnitude / 600.0f, 0.8f, 1.25f);
+    const float Scale = Length / FMath::Max(1.0, LocalBounds.GetSize().X);
+    RuntimeIndicatorMesh->SetRelativeScale3D(FVector(Scale));
+    RuntimeIndicatorMesh->SetRelativeLocation(FVector(-LocalBounds.Min.X * Scale, 0, 0));
 }
 
 void UMotionDirectionIndicatorComponent::ApplyDirectionColor()
@@ -301,7 +372,7 @@ void UMotionDirectionIndicatorComponent::ApplyDirectionColor()
         RuntimeIndicatorMesh->SetMaterial(0, DirectionMaterial);
     }
 
-    DirectionMaterial->SetVectorParameterValue(TEXT("Color"), DirectionColor);
+    DirectionMaterial->SetVectorParameterValue(TEXT("GizmoColor"), DirectionColor);
 }
 
 void UMotionDirectionIndicatorComponent::InitializeRuntimeIndicatorMesh(
@@ -328,17 +399,17 @@ void UMotionDirectionIndicatorComponent::EnsureRuntimeIndicatorMesh()
             RF_Transient);
         InitializeRuntimeIndicatorMesh(RuntimeIndicatorMesh);
 
-        UStaticMesh* ConeMesh = LoadObject<UStaticMesh>(
+        UStaticMesh* ArrowMesh = LoadObject<UStaticMesh>(
             nullptr,
-            TEXT("/Engine/BasicShapes/Cone.Cone"));
-        if (ConeMesh)
+            TEXT("/Engine/InteractiveToolsFramework/Meshes/GizmoArrowHandle.GizmoArrowHandle"));
+        if (ArrowMesh)
         {
-            RuntimeIndicatorMesh->SetStaticMesh(ConeMesh);
+            RuntimeIndicatorMesh->SetStaticMesh(ArrowMesh);
         }
 
         UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(
             nullptr,
-            TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+            TEXT("/Engine/InteractiveToolsFramework/Materials/GizmoComponentMaterial.GizmoComponentMaterial"));
         if (BaseMaterial)
         {
             RuntimeIndicatorMesh->SetMaterial(0, BaseMaterial);

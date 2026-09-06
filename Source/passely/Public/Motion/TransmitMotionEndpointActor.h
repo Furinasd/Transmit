@@ -72,4 +72,5 @@ private:
 
     void BindRoomResetController();
     void RefreshPresentation();
+    void UpdateDirectionIndicator(const FMotionState& State);
 };

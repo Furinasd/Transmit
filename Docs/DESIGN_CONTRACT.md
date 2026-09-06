@@ -93,7 +93,7 @@ ADR-003 (`Docs/Decisions/ADR-003-camera-driven-linear-reroute.md`) governs Ordin
 - **Atomic transaction**: a successful transaction clears the previous owner and assigns the next owner as one operation.
 - **Rejection preservation**: a rejected request never silently consumes or loses the state and returns a structured, distinguishable reason.
 - **Reset semantics**: the room restores the authoritative start snapshot for critical actors and Player carry state; Reset clears transient selection / Preview.
-- **Targeting**: stable selection ranking, soft-cone assistance, stickiness, and commit-time revalidation are unchanged.
+- **Targeting**: stable selection ranking and commit-time revalidation remain authoritative. The 2026-09-06 usability adjustment widens ordinary acquisition and gives an already selected target a larger release cone, with bounded visible-body size assistance; slight reticle drift should not drop selection. Occlusion, range, eligibility, and ownership checks still apply.
 - **Canonical resolver implementation**: resolver thresholds, hysteresis model, and the six-direction set are frozen.
 
 These semantics are not part of the v0.4 implementation delta. A defect fix that restores them (for example, Preview passing the same direction data that Commit validates) is a repair, not a redesign.

@@ -127,7 +127,11 @@ The targeting layer (`UMotionInteractorComponent`) produces a stable candidate p
 3. distance;
 4. compatibility with the Player's current carry state and the resolved canonical direction.
 
-Soft-cone assistance and short target stickiness belong here. The transaction layer revalidates the selected actor at commit time and remains authoritative.
+Soft-cone assistance and short target stickiness belong here. The gameplay camera POV matches the reticle; non-player test actors retain their eye-view fallback. Candidate range and original LOS stay based on the player eyes, with camera visibility also required, so a SpringArm cannot extend reach or see around a player-blocking wall. Acquisition defaults to a 28-degree half cone, with up to 10 degrees of physical-mesh size assistance; the current target has an additional 12-degree release margin. Ranking still uses angle/distance plus the existing sticky score. Physical mesh centers avoid selecting a moving Source by an unrelated Actor pivot. The transaction layer revalidates the selected actor at commit time and remains authoritative.
+
+Presentation reads that same preview: `TransmitHUD` draws a small reticle and corner brackets around the selected physical body. `MotionDirectionIndicatorComponent` positions a compact runtime arrow just outside the dominant physical mesh's output face (mesh-local intersection supports rotation and non-uniform scale), aligned to `ProjectedWorldDirection`; it never chooses direction. A dimmed self-occlusion material keeps the far-side cue visible while occluded/ineligible targets still suppress it. Existing Blueprint component layouts and serialized fields are retained; the old overhead-cone mesh/material are replaced only at runtime.
+
+`TransmitMotionEndpointActor` also places its owned-motion arrow on the body's output face and follows the animated body each tick. This remains presentation only; the motion state, preview loop, and Reset ownership are unchanged.
 
 ## Direction Policy Boundary (Final v0.4)
 
