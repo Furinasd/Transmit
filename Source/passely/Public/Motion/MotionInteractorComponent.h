@@ -90,7 +90,7 @@ private:
     float TargetingRange = 2000.0f;
 
     UPROPERTY(EditAnywhere, Category = "Motion|Targeting", meta = (ClampMin = "1.0", ClampMax = "89.0"))
-    float AimConeHalfAngleDegrees = 18.0f;
+    float AimConeHalfAngleDegrees = 28.0f;
 
     UPROPERTY(EditAnywhere, Category = "Motion|Targeting", meta = (ClampMin = "0.0"))
     float AngleWeight = 1.0f;
@@ -119,6 +119,7 @@ private:
     void GatherCandidates(TArray<FCandidateEvaluation>& OutCandidates) const;
     FCandidateEvaluation EvaluateCandidate(
         AActor* Candidate,
+        const FVector& InteractionOrigin,
         const FVector& ViewOrigin,
         const FRotator& ViewRotation,
         const UMotionTransferComponent* PlayerMotion) const;

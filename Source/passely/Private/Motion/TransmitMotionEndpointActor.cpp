@@ -6,6 +6,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
+#include "Motion/MotionDirectionIndicatorComponent.h"
 #include "Motion/MotionRoomResetController.h"
 #include "Motion/MotionTransferComponent.h"
 #include "TimerManager.h"
@@ -39,9 +40,8 @@ ATransmitMotionEndpointActor::ATransmitMotionEndpointActor()
 
     DirectionIndicator = CreateDefaultSubobject<UArrowComponent>(TEXT("DirectionIndicator"));
     DirectionIndicator->SetupAttachment(SceneRoot);
-    DirectionIndicator->SetRelativeLocation(FVector(0.0f, 0.0f, 100.0f));
     DirectionIndicator->SetArrowColor(FColor::Cyan);
-    DirectionIndicator->SetArrowSize(2.0f);
+    DirectionIndicator->SetArrowSize(0.6f);
     DirectionIndicator->SetHiddenInGame(false);
     DirectionIndicator->SetVisibility(false);
 
@@ -108,6 +108,10 @@ void ATransmitMotionEndpointActor::Tick(const float DeltaSeconds)
         .GetSafeNormal();
     Body->SetRelativeLocation(
         InitialBodyRelativeLocation + LocalDirection * MotionPreviewDistanceTravelled);
+    if (bHasMotion)
+    {
+        UpdateDirectionIndicator(State);
+    }
 }
 
 void ATransmitMotionEndpointActor::HandleMotionStateChanged(
@@ -164,14 +168,24 @@ void ATransmitMotionEndpointActor::RefreshPresentation()
     DirectionIndicator->SetVisibility(bHasMotion);
     DirectionIndicator->SetHiddenInGame(false);
 
-    if (bHasMotion)
-    {
-        DirectionIndicator->SetWorldRotation(State.Direction.Rotation());
-        DirectionIndicator->SetArrowSize(FMath::Clamp(State.Magnitude / 300.0f, 1.5f, 4.0f));
-    }
-
     Body->SetRelativeScale3D(
         bConsumedSinceReset
             ? InitialBodyRelativeScale * ConsumedBodyScaleMultiplier
             : InitialBodyRelativeScale);
+    if (bHasMotion)
+    {
+        UpdateDirectionIndicator(State);
+    }
+}
+
+void ATransmitMotionEndpointActor::UpdateDirectionIndicator(const FMotionState& State)
+{
+    if (const UStaticMesh* BodyMesh = Body->GetStaticMesh())
+    {
+        DirectionIndicator->SetWorldLocation(
+            UMotionDirectionIndicatorComponent::CalculateFaceAnchor(
+                BodyMesh->GetBoundingBox(), State.Direction, 8.0f, Body->GetComponentTransform()));
+    }
+    DirectionIndicator->SetWorldRotation(State.Direction.Rotation());
+    DirectionIndicator->SetArrowSize(0.6f * FMath::Clamp(State.Magnitude / 600.0f, 0.8f, 1.25f));
 }

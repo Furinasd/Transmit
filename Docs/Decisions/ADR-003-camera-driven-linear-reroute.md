@@ -26,6 +26,16 @@
 
 The original v0.3 text below is preserved unchanged as decision history.
 
+## Camera-authored correction (2026-09-06)
+
+Human PIE showed that comparing Source direction with a rotating camera basis
+could change the enum while preserving world motion. Ordinary Transfer instead
+quantizes camera yaw onto fixed world axes (+X Forward, +Y Right, -X Back,
+-Y Left); camera pitch selects world +Z Up / -Z Down. Incoming Source direction
+never selects output. Capture/Carry, the existing hysteresis model and thresholds,
+Preview = Commit, and the PreserveSource exception remain unchanged. This
+correction supersedes the source-relative wording below, retained as history.
+
 ## Context
 
 EXP-001 proved the smallest ownership loop: `Source -> Player -> Receiver` with Capture / Carry / Transfer / Consume and 20/20 Room Reset. The pre-v0.3 rule was that the Player's aim selects a target but never supplies output direction; direction could change only through a deterministic environment converter such as a Redirect Rail.

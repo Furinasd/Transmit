@@ -56,9 +56,9 @@ Motion State is gameplay-authored motion, not a promise of strict mass, friction
 ### Ordinary Linear — CameraCanonical (unchanged v0.3 policy)
 
 - **Capture preserves Source Motion**: direction and magnitude are taken from the Source unchanged.
-- **Transfer reroutes by gameplay camera**: the carried Linear direction is interpreted against the gameplay camera and quantized to exactly one of Forward / Back / Left / Right / Up / Down; the Target receives the resolved world direction.
+- **Transfer reroutes by gameplay camera**: the gameplay camera directly selects a fixed world direction: yaw 0 → +X / Forward, +90 → +Y / Right, 180 → -X / Back, -90 → -Y / Left; pitch entering Up / Down selects +Z / -Z. Incoming ordinary Source direction is preserved through Capture and Carry but never selects the Transfer output. This camera-authored correction supersedes the source-relative v0.3 interpretation.
 - **One resolver, one result**: the same Canonical Direction Resolver drives Preview and Commit. Preview and Transfer may never compute direction or compatibility with different rules.
-- **Deterministic and hysteresis-guarded**: horizontal four directions come from camera yaw; Up / Down use an explicit pitch threshold; boundaries keep hysteresis so Forward ↔ Up and adjacent horizontal sectors do not flicker. Identical camera pose + identical carried direction must produce an identical result.
+- **Deterministic and hysteresis-guarded**: horizontal four directions come from camera yaw; Up / Down use an explicit pitch threshold; boundaries keep hysteresis so Forward ↔ Up and adjacent horizontal sectors do not flicker. Identical camera pose and hysteresis history produce identical output for every valid incoming ordinary direction.
 - **Scope**: CameraCanonical applies to Ordinary Linear Motion. It is the default Transfer policy, not a rule that overrides promoted Motion-specific exceptions.
 
 ### Directional Carrier (promoted, not implemented)
@@ -93,7 +93,7 @@ ADR-003 (`Docs/Decisions/ADR-003-camera-driven-linear-reroute.md`) governs Ordin
 - **Atomic transaction**: a successful transaction clears the previous owner and assigns the next owner as one operation.
 - **Rejection preservation**: a rejected request never silently consumes or loses the state and returns a structured, distinguishable reason.
 - **Reset semantics**: the room restores the authoritative start snapshot for critical actors and Player carry state; Reset clears transient selection / Preview.
-- **Targeting**: stable selection ranking, soft-cone assistance, stickiness, and commit-time revalidation are unchanged.
+- **Targeting**: stable selection ranking and commit-time revalidation remain authoritative. The 2026-09-06 usability adjustment widens ordinary acquisition and gives an already selected target a larger release cone, with bounded visible-body size assistance; slight reticle drift should not drop selection. Occlusion, range, eligibility, and ownership checks still apply.
 - **Canonical resolver implementation**: resolver thresholds, hysteresis model, and the six-direction set are frozen.
 
 These semantics are not part of the v0.4 implementation delta. A defect fix that restores them (for example, Preview passing the same direction data that Commit validates) is a repair, not a redesign.

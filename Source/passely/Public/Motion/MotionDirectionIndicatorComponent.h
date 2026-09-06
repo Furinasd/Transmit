@@ -30,6 +30,12 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion|Presentation")
     TObjectPtr<UStaticMeshComponent> RuntimeIndicatorMesh;
 
+    // Ray from the physical target center to its output face, then clearance.
+    // Pure geometry; does not author or mutate Motion direction.
+    static FVector CalculateFaceAnchor(
+        const FBox& TargetBounds, const FVector& Direction, float Clearance,
+        const FTransform& BoundsToWorld = FTransform::Identity);
+
     UFUNCTION(BlueprintCallable, Category = "Motion|Presentation")
     void ShowDirection(const FVector& Direction, float Magnitude);
 
@@ -57,6 +63,7 @@ private:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion|Debug", meta = (AllowPrivateAccess = "true"))
     bool bShowOwnerDebugArrow = false;
 
+    // Retained for existing Blueprint serialization; face cues no longer hover above targets.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion|Presentation", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
     float ReceiverPreviewHoverHeight = 45.0f;
 

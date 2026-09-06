@@ -127,13 +127,17 @@ The targeting layer (`UMotionInteractorComponent`) produces a stable candidate p
 3. distance;
 4. compatibility with the Player's current carry state and the resolved canonical direction.
 
-Soft-cone assistance and short target stickiness belong here. The transaction layer revalidates the selected actor at commit time and remains authoritative.
+Soft-cone assistance and short target stickiness belong here. The gameplay camera POV matches the reticle; non-player test actors retain their eye-view fallback. Candidate range and original LOS stay based on the player eyes, with camera visibility also required, so a SpringArm cannot extend reach or see around a player-blocking wall. Acquisition defaults to a 28-degree half cone, with up to 10 degrees of physical-mesh size assistance; the current target has an additional 12-degree release margin. Ranking still uses angle/distance plus the existing sticky score. Physical mesh centers avoid selecting a moving Source by an unrelated Actor pivot. The transaction layer revalidates the selected actor at commit time and remains authoritative.
+
+Presentation reads that same preview: `TransmitHUD` draws a small reticle and corner brackets around the selected physical body. `MotionDirectionIndicatorComponent` positions a compact runtime arrow just outside the dominant physical mesh's output face (mesh-local intersection supports rotation and non-uniform scale), aligned to `ProjectedWorldDirection`; it never chooses direction. A dimmed self-occlusion material keeps the far-side cue visible while occluded/ineligible targets still suppress it. Existing Blueprint component layouts and serialized fields are retained; the old overhead-cone mesh/material are replaced only at runtime.
+
+`TransmitMotionEndpointActor` also places its owned-motion arrow on the body's output face and follows the animated body each tick. This remains presentation only; the motion state, preview loop, and Reset ownership are unchanged.
 
 ## Direction Policy Boundary (Final v0.4)
 
 Target selection and direction resolution are physically decoupled. Direction policy is a property of the carried Motion, not of the camera or the Target:
 
-- **Ordinary Linear — CameraCanonical**: `UMotionCanonicalDirectionResolver` maps (carried Linear direction + gameplay camera pose) → one of six canonical directions and a world-space `ProjectedWorldDirection`, with pitch and sector hysteresis. This is the implemented, frozen v0.3 resolver.
+- **Ordinary Linear — CameraCanonical**: `UMotionCanonicalDirectionResolver` quantizes gameplay camera yaw against fixed world X/Y axes and camera pitch against Up/Down thresholds, producing one of six world-axis `ProjectedWorldDirection` values with the existing hysteresis model. Carried direction is validated as state data, not used for selection; Capture/Carry retain it. The source-relative v0.3 interpretation is corrected by the 2026-09-06 human-PIE finding.
 - **Boss High Motion — PreserveSource**: direction stays locked to the committed Charger Dash world direction and bypasses the camera resolver. This policy is promoted by v0.4 and not implemented; current code carries no explicit direction-policy marker, so captured Dash Motion still enters CameraCanonical on Transfer. The policy must not be inferred from magnitude or `SourceId`.
 - **Preview = Commit is policy-independent**: whichever policy applies, the interactor computes the world direction once and carries it inside `FMotionTransferContext.DirectionResolution`; Preview and Commit consume the same result.
 - **`RequiredCanonicalDirection`**: receivers may declare one of the six canonical directions; a mismatch is `IncompatibleDirection` and never consumes Player Motion. This is a compatibility/regression capability, not the Zone 2 core mechanic.
@@ -168,7 +172,7 @@ Transfer input
 Resolve IMotionTransferable Target
         ↓
 Determine direction policy from the carried Motion
-        ├── Ordinary Linear → CameraCanonical: carried direction + gameplay camera
+        ├── Ordinary Linear → CameraCanonical: gameplay camera yaw / pitch
         │         → one of Forward / Back / Left / Right / Up / Down
         └── Boss High Motion → PreserveSource: committed Dash world direction
                               [v0.4 promoted; not yet implemented]

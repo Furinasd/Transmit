@@ -509,6 +509,32 @@ For production-level work, prefer:
 
 `Approved Graybox → One Production Phase → Save → PIE → Human Inspection → Commit → Next Phase`
 
+### Editor Authoring Smoke Gate
+
+Reflection-facing changes require validation on the Unreal Editor authoring surface that consumes them.
+
+This applies when a task changes one or more of:
+
+* `UCLASS`, `USTRUCT`, or `UPROPERTY` exposure;
+* `Instanced`, `EditInlineNew`, or `DefaultToInstanced` semantics;
+* Details-panel `Category` layout;
+* Blueprint-visible property or function exposure;
+* designer-facing component ownership or hierarchy.
+
+Build, automation, Blueprint compile, and Map Check are necessary evidence but do not prove that Details-panel generation or designer authoring is safe.
+
+Minimum smoke path:
+
+`Place/load actor → Select/open → Inspect Details → Expand exposed structs/inline objects → Modify one representative value → Save → Reopen`
+
+For inherited Blueprint authoring, also verify:
+
+`Open Blueprint → Inspect inherited properties → Compile → Change default → Save/Reopen`
+
+If Codex cannot execute or observe the relevant Editor surface, it must leave this as an explicit human validation gate. It must not self-certify reflection-facing work from source-level tests alone.
+
+See `Docs/dev/20260905-charger-editor-authoring-postmortem.md` for the incident that promoted this rule.
+
 Never claim macOS compatibility based solely on Windows compilation.
 
 ---
