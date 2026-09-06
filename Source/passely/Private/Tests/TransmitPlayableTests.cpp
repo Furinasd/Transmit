@@ -29,7 +29,8 @@ bool FTransmitRamSignatureTest::RunTest(const FString& Parameters)
     FMotionTransferContext Context;
     Context.DirectionResolution = FMotionDirectionResolution::PreserveSource(Dash.Direction);
 
-    Player->GrantMotionState(Dash);
+    Player->ConfigureForTesting(TEXT("Player"), false, true,
+        EMotionEndpointMode::Store, TOptional<FMotionState>(Dash));
     TestFalse(TEXT("An undelivered carrier leaves Ram locked"),
         Player->TryTransferToActor(Ram, Context).bSucceeded);
     TestTrue(TEXT("Unarmed rejection retains Player ownership"), Player->HasMotionState());
@@ -48,13 +49,15 @@ bool FTransmitRamSignatureTest::RunTest(const FString& Parameters)
     Reverse.Direction = -FVector::ForwardVector;
     Context.DirectionResolution = FMotionDirectionResolution::PreserveSource(Reverse.Direction);
     Player->RestoreInitialState(false);
-    Player->GrantMotionState(Reverse);
+    Player->ConfigureForTesting(TEXT("Player"), false, true,
+        EMotionEndpointMode::Store, TOptional<FMotionState>(Reverse));
     TestFalse(TEXT("Opposite dash axis cannot power the Ram"),
         Player->TryTransferToActor(Ram, Context).bSucceeded);
     TestTrue(TEXT("Axis rejection retains Player ownership"), Player->HasMotionState());
 
     Player->RestoreInitialState(false);
-    Player->GrantMotionState(Dash);
+    Player->ConfigureForTesting(TEXT("Player"), false, true,
+        EMotionEndpointMode::Store, TOptional<FMotionState>(Dash));
     Context.DirectionResolution = FMotionDirectionResolution::PreserveSource(Dash.Direction);
     TestTrue(TEXT("Armed Ram accepts correct preserved direction in Preview"),
         IMotionTransferable::CallCanReceiveMotion(Ram, Dash, Context).bAllowed);

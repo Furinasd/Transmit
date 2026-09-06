@@ -24,7 +24,7 @@ class TransmitRun:
   self.wait('carrier catch',lambda:self.a['Route_Carrier'].is_blocked_by_collision(),12)
   self.walk((5100,-100))
   self.add('recapture carrier',lambda:self.verb('Route_Carrier','capture'))
-  self.walk((4900,-290))
+  self.walk((5100,-260))
   self.add('reroute carrier',lambda:self.verb('Route_Carrier','transfer',yaw=30))
   self.wait('ram armed',lambda:self.a['Weaponize_Ram'].get_editor_property('armed'),15)
   for pos in [(5200,-750),(5850,-650),(7000,-500),(7000,700),(7620,700),(7620,1420)]:self.walk(pos)
