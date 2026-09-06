@@ -79,12 +79,51 @@ void ATransmitHUD::DrawHUD()
     {
         const float Scale = Canvas ? FMath::Clamp(Canvas->SizeX / 1600.0f, 0.75f, 1.3f) : 1.0f;
         const float X = 38.0f * Scale;
-        DrawRect(FLinearColor(0.015f, 0.025f, 0.035f, 0.78f), X - 14, 30 * Scale, 760 * Scale, 116 * Scale);
-        DrawText(It->GetChapterText(), FLinearColor(0.2f, 0.85f, 0.9f), X, 40 * Scale, GEngine->GetSmallFont(), Scale);
-        DrawText(It->GetObjectiveText(), FLinearColor::White, X, 67 * Scale, GEngine->GetMediumFont(), Scale);
-        DrawText(It->GetHintText(), FLinearColor(0.78f, 0.85f, 0.87f), X, 106 * Scale, GEngine->GetSmallFont(), Scale);
+        const float TextWidth = 660.0f * Scale;
+        const auto Wrap = [this, TextWidth](const FString& Text, UFont* Font, float TextScale)
+        {
+            TArray<FString> Words;
+            Text.ParseIntoArrayWS(Words);
+            TArray<FString> Lines;
+            FString Line;
+            for (const FString& Word : Words)
+            {
+                const FString Candidate = Line.IsEmpty() ? Word : Line + TEXT(" ") + Word;
+                float W = 0, H = 0;
+                GetTextSize(Candidate, W, H, Font, TextScale);
+                if (!Line.IsEmpty() && W > TextWidth)
+                {
+                    Lines.Add(Line);
+                    Line = Word;
+                }
+                else
+                {
+                    Line = Candidate;
+                }
+            }
+            if (!Line.IsEmpty()) { Lines.Add(Line); }
+            return Lines;
+        };
+        const auto Objectives = Wrap(It->GetObjectiveText(), GEngine->GetMediumFont(), 1.8f * Scale);
+        const auto Hints = Wrap(It->GetHintText(), GEngine->GetSmallFont(), 1.35f * Scale);
+        const float HintY = (77.0f + 29.0f * Objectives.Num()) * Scale;
+        const float PanelBottom = HintY + (23.0f * Hints.Num() + 17.0f) * Scale;
+        DrawRect(FLinearColor(0.015f, 0.025f, 0.035f, 0.78f), X - 14 * Scale, 30 * Scale,
+            TextWidth + 28 * Scale, PanelBottom - 30 * Scale);
+        DrawText(It->GetChapterText(), FLinearColor(0.2f, 0.85f, 0.9f), X, 42 * Scale,
+            GEngine->GetSmallFont(), 1.25f * Scale);
+        for (int32 Index = 0; Index < Objectives.Num(); ++Index)
+        {
+            DrawText(Objectives[Index], FLinearColor::White, X, (73 + 29 * Index) * Scale,
+                GEngine->GetMediumFont(), 1.8f * Scale);
+        }
+        for (int32 Index = 0; Index < Hints.Num(); ++Index)
+        {
+            DrawText(Hints[Index], FLinearColor(0.78f, 0.85f, 0.87f), X, HintY + 23 * Index * Scale,
+                GEngine->GetSmallFont(), 1.35f * Scale);
+        }
         DrawText(TEXT("E  CAPTURE    Q  TRANSFER    BACKSPACE  RETRY AREA    R  RESTART"), FLinearColor(0.75f, 0.8f, 0.83f), X,
-            Canvas->SizeY - 40 * Scale, GEngine->GetSmallFont(), Scale);
+            Canvas->SizeY - 40 * Scale, GEngine->GetSmallFont(), 1.15f * Scale);
     }
 
     const APawn* Pawn = PlayerOwner->GetPawn();
@@ -119,6 +158,28 @@ void ATransmitHUD::DrawHUD()
     }
     DrawCrosshair(Color);
     DrawTargetBrackets(Preview.Target, Color);
+    if (!Preview.bEligible)
+    {
+        FString Reason;
+        switch (Preview.Rejection)
+        {
+        case EMotionTransferRejection::TimingRejected:
+            Reason = Cast<ATransmitRam>(Preview.Target) ? TEXT("Deliver the relay to arm this Ram") : TEXT("Wait for the committed dash"); break;
+        case EMotionTransferRejection::SourceEmpty: Reason = TEXT("No motion here to capture"); break;
+        case EMotionTransferRejection::CarrierOccupied: Reason = TEXT("Already carrying motion — transfer it first"); break;
+        case EMotionTransferRejection::IncompatibleType: Reason = TEXT("This Ram needs a captured charge"); break;
+        case EMotionTransferRejection::IncompatibleMagnitudeTier: Reason = TEXT("More force is required"); break;
+        case EMotionTransferRejection::IncompatibleDirection: Reason = TEXT("The motion points away from this device's axis"); break;
+        case EMotionTransferRejection::CooldownActive: Reason = TEXT("Let the Ram finish its stroke"); break;
+        default: break;
+        }
+        if (!Reason.IsEmpty())
+        {
+            float W = 0, H = 0;
+            GetTextSize(Reason, W, H, GEngine->GetSmallFont());
+            DrawText(Reason, Color, (Canvas->SizeX-W)*0.5f, Canvas->SizeY*0.60f, GEngine->GetSmallFont());
+        }
+    }
 }
 
 void ATransmitHUD::DrawCueLine(

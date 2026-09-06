@@ -87,3 +87,13 @@ Live flow validation in progress.
 - Events now fire after their public state and gate changes; full Reset clears completion
   before flow notification. Exotic backtracking that stashes the route resource outside
   the retry group uses full Reset, preserving single ownership instead of duplicating it.
+
+## A2 integration preparation
+
+- B1 `16b9e8d` integrated as `bb7d1ac`; 13 assets hydrated, original WAV sources present. B2 still pending.
+- Additional Flow corrections: gate-open retry keeps the Charger stopped; local retry notification follows objective recomputation; full Reset clears stale retry feedback.
+- HUD rejection explanations and larger wrapped objective/hint typography implemented; latest Editor build passed (`/private/tmp/transmit-flow-hud-build.log`, 7.81 seconds).
+- New `validate_ltransmit_reset_edges.py` schedules real-Interactor Ram-stroke full Reset and external route-owner fallback checks; runtime execution pending GUI return.
+- Mac Development build/file Cook/IoStore Stage succeeded (`/private/tmp/transmit-flow-package-file.log`, 164.72 seconds). Full staged app copied to `Saved/LTransmitCandidate/A1-Verified/Transmit.app`, signature verified, independently launched L_Transmit using Metal SM6. Native R and E observed. A1 package predates B2 and newest HUD. Closed after smoke.
+- Reusable `Scripts/package_ltransmit_mac.sh` verifies/copies full staged bundle; do not ship the incomplete earlier UAT archive. Packaging config selects formal map only and file-based cooked output.
+- B retains GUI lease for current preview validation, then returns it for A formal-map integration.

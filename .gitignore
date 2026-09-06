@@ -34,6 +34,8 @@ Thumbs.db
 StagedBuilds/
 Packaged/
 # Platform resource templates copied from the Engine by UBT (not project-owned)
+# UBT increments this local macOS bundle build counter.
+Build/Mac/passely.PackageVersionCounter
 Build/Mac/Resources/Info.Template.plist
 Build/Mac/Resources/Sandbox.NoNet.entitlements
 Build/Mac/Resources/Sandbox.Server.entitlements

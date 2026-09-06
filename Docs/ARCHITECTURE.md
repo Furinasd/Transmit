@@ -1,6 +1,6 @@
 # Transmit Architecture
 
-> Status: Final v0.4 design lock promoted to repository docs on 2026-09-05 (docs-only). The v0.3 ordinary-Linear resolver core, Charger FSM, Charger swept movement, and Actor dispatch are implemented and automated-verified on `feat/gameplay-core-v03` (HEAD `1fb96ea`). Directional Carrier and Boss High Motion direction policy are v0.4-promoted runtime deltas that are not implemented yet; `L_Transmit` is future content. Sections still marked "Proposed" are target design.
+> Status: updated during L_Transmit candidate production on 2026-09-06. CameraCanonical, PreserveSource, Actor-path Preview=Commit and Directional Carrier are implemented. The formal Learn → Route → Weaponize map and level flow exist on `Jason/L_Transmit_v01`; current validation and remaining human gates are recorded in `STATE.md` and `Handoff/A_LevelFlow.md`. Sections marked "Proposed" remain target design.
 
 ## Scope
 
@@ -138,12 +138,12 @@ Presentation reads that same preview: `TransmitHUD` draws a small reticle and co
 Target selection and direction resolution are physically decoupled. Direction policy is a property of the carried Motion, not of the camera or the Target:
 
 - **Ordinary Linear — CameraCanonical**: `UMotionCanonicalDirectionResolver` quantizes gameplay camera yaw against fixed world X/Y axes and camera pitch against Up/Down thresholds, producing one of six world-axis `ProjectedWorldDirection` values with the existing hysteresis model. Carried direction is validated as state data, not used for selection; Capture/Carry retain it. The source-relative v0.3 interpretation is corrected by the 2026-09-06 human-PIE finding.
-- **Boss High Motion — PreserveSource**: direction stays locked to the committed Charger Dash world direction and bypasses the camera resolver. This policy is promoted by v0.4 and not implemented; current code carries no explicit direction-policy marker, so captured Dash Motion still enters CameraCanonical on Transfer. The policy must not be inferred from magnitude or `SourceId`.
+- **Boss High Motion — PreserveSource**: direction stays locked to the committed Charger Dash world direction and bypasses the camera resolver. The Charger grants `PreserveSource` in `FMotionState.DirectionPolicy` when its Dash commits; the interactor bypasses CameraCanonical for that carried state. The policy must not be inferred from magnitude or `SourceId`.
 - **Preview = Commit is policy-independent**: whichever policy applies, the interactor computes the world direction once and carries it inside `FMotionTransferContext.DirectionResolution`; Preview and Commit consume the same result.
 - **`RequiredCanonicalDirection`**: receivers may declare one of the six canonical directions; a mismatch is `IncompatibleDirection` and never consumes Player Motion. This is a compatibility/regression capability, not the Zone 2 core mechanic.
-- **Directional Carrier (promoted, not implemented)**: the ordinary-Linear Target role that accepts any of the six resolved directions and moves itself — the Actor, not a child presentation mesh — in world space. It must use deterministic swept collision, stop on blocking collision, remain a valid Source for re-capture, and be restored by the existing Room Reset snapshot.
+- **Directional Carrier (implemented)**: the ordinary-Linear Target role that accepts any of the six resolved directions and moves itself — the Actor, not a child presentation mesh — in world space. It must use deterministic swept collision, stop on blocking collision, remain a valid Source for re-capture, and be restored by the existing Room Reset snapshot.
 
-The seam for this change is the existing `FMotionTransferContext`/state path: introduce one source-authored direction-policy value, resolve the world direction once per policy, and keep ownership mutation (`TryMoveBetween`) untouched.
+The direction-policy seam lives in `FMotionState` and the existing `FMotionTransferContext` path. Resolution occurs once per policy; atomic ownership mutation stays inside `TryMoveBetween`.
 
 ## Proposed Control and Data Flow
 
@@ -251,26 +251,23 @@ Core Motion Transfer code must not depend on a specific Player, Enemy, Environme
 
 ## Current Implementation Boundary
 
-As of 2026-09-05, HEAD `1fb96ea` (`feat/gameplay-core-v03`) is the committed checkpoint. Runtime state by category:
+The formal content line is `Jason/L_Transmit_v01` (2026-09-06). Older implementation inventories at `1fb96ea` and `d9b8c4a` are superseded; historical planning and validation remain in Git and `Docs/dev/`.
 
-**Implemented / verified**
+- `UMotionTransferComponent` owns Motion state, atomic transfer, rejection preservation and Reset snapshots. `IMotionTransferable::Call*` keeps native and Blueprint Actor paths consistent.
+- `UMotionInteractorComponent` owns camera-based target acquisition and the preview shared by commit. Ordinary motion resolves against six world axes; Charger High Motion keeps its committed Dash axis.
+- `ATransmitDirectionalCarrierActor` moves its collision root in world space, stops on swept blocking collision, permits re-capture and restores through the existing room Reset.
+- `ATransmitBridgeSlab`, `ATransmitRam` and `ATransmitArenaCharger` are concrete L_Transmit content roles. The delivered relay locks its existing Motion in place and arms the Ram. Each consumed High Motion drives one Ram stroke; the first impact fractures the gate, the second opens it.
+- `ATransmitLevelDirector` observes those real actors and chooses objective/transition state. It activates the encounter only after arming and reaching the arena, ends the threat after impact two, and completes after the player crosses the exit marker. It does not own or transfer Motion.
 
-- v0.3 ordinary-Linear core: `UMotionCanonicalDirectionResolver` (six canonical directions, pitch + sector hysteresis, deterministic), `FMotionDirectionResolution` carried inside `FMotionTransferContext`, `EMotionCanonicalDirection` Receiver requirements, and `UMotionTransferComponent::GrantMotionState`.
-- Charger: `ATransmitChargerActor` + `UMotionChargerStateMachine` (Telegraph → Dash → Recovery with a capture window), collision-enabled capsule root, presentation-only Body collision, swept dash movement, blocking-hit Recovery, and `EMotionTransferRejection::TimingRejected`.
-- Actor dispatch: `IMotionTransferable::Call*` preserves Blueprint event dispatch while making native-only C++ implementations reachable.
-- Historical evidence: macOS `passelyEditor` build succeeded and 10/10 `Transmit.MotionTransfer` tests passed; EXP-001 PIE loop and 20/20 Reset were verified on the pre-v0.3 baseline. A fresh source-aligned rerun on HEAD `1fb96ea` is not yet recorded.
+### Level retry and presentation boundary
 
-**Pre-existing committed work (checkpoint `1fb96ea`, not v0.4 deltas)**
+`R` retains the existing whole-room Reset transaction. `Backspace` calls the director's local retry:
 
-- `TransmitHUD`, `MotionDirectionIndicatorComponent` presentation rework, `TransmitMotionEndpointActor` presentation changes, canonical resolver camera-pitch Up/Down update with tests, and `BP_TransmitGameMode` asset update.
+- Learn restarts the whole room.
+- Route restores the player's empty carry state and the original Route Source/Carrier states and transforms, preserving the completed bridge.
+- Weaponize preserves the delivered relay, armed Ram and committed gate impacts, and restores the player to arena entry. The Charger restarts only while fewer than two impacts are committed.
+- If the route resource is stored outside the Route retry group, local retry falls back to whole-room Reset, avoiding a second copy of that resource. Completion retry also starts a fresh full run.
 
-**v0.4 promoted, not implemented**
+`OnFlowChanged` and `OnLocalRetry` fire after their observable state changes. Ram `OnArmed` fires after carrier permission locking; `OnImpact` fires after hit count and gate mutation. The HUD reads the director and actual interaction preview; it explains objectives and rejection without granting interaction eligibility. Dedicated presentation may observe these events and references but must not supply its own gameplay state.
 
-- Directional Carrier actor: no world-space actor movement, swept blocking stop, re-capture path, or carrier test exists. The existing `TransmitMotionEndpointActor` only loops a child `Body` presentation and cannot substitute.
-- Direction-policy seam: no policy field exists in `FMotionState`/context, so captured Charger Dash Motion is still camera-rerouted on Transfer instead of preserving the committed Dash world direction.
-- Open consistency defect against frozen Preview = Commit: the default Actor-path Preview discards `FMotionTransferContext.DirectionResolution` (it calls `CanReceiveState(State)` without the resolution) while the component-level Commit rechecks with the resolution. A `RequiredCanonicalDirection` Receiver can therefore preview eligible and reject at commit. Existing tests call the component directly and do not cover the Actor path.
-- Ram Block content role for Zone 3.
-
-**Future content**
-
-- `L_Transmit` single map, Zone 1 Learn → Zone 2 Route → Zone 3 Weaponize blockout, Bridge Slab / Ram Rail / Ram / Breakable Gate / Boss encounter content, presentation pass, and first-player playtest.
+`Scripts/Editor/author_ltransmit_flow.py` patches the scoped formal map idempotently. The older full graybox builder is a historical bootstrap, not a safe way to update an authored candidate. Gameplay/resource checks, Editor authoring checks, and human readability acceptance are distinct evidence layers; current results belong in `STATE.md` rather than this architecture record.

@@ -636,6 +636,7 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
 void ATransmitLevelDirector::HandleDirectorPostRoomReset()
 {
     Checkpoint = 0;
+    LastRetrySeconds = -10.0f;
     bEntryTriggered = false;
     bGateBrokenHandled = false;
     bCompletionShown = false;
@@ -729,7 +730,7 @@ void ATransmitLevelDirector::UpdateFlow()
         const bool bCarrierLoaded = Carrier->Motion->TryGetMotionState(State);
         if (bCarrierLoaded && State.Direction.Y > 0.9f) SetFlowStep(ETransmitFlowStep::RerouteCarrier);
         else if (bAtCatch && bLoaded) SetFlowStep(ETransmitFlowStep::RerouteCarrier);
-        else if (bAtCatch && bCarrierLoaded) SetFlowStep(ETransmitFlowStep::RecaptureCarrier);
+        else if (bAtCatch && bCarrierLoaded && FVector::Dist2D(Player->GetActorLocation(), CatchMarker->GetActorLocation()) < 850.0f) SetFlowStep(ETransmitFlowStep::RecaptureCarrier);
         else if (bCarrierLoaded) SetFlowStep(ETransmitFlowStep::ChaseCarrier);
         else SetFlowStep(ETransmitFlowStep::SendCarrier);
     }
@@ -788,9 +789,13 @@ bool ATransmitLevelDirector::RequestLocalRetry()
         if (Player->GetController()) Player->GetController()->SetControlRotation(SafeMarker->GetActorRotation());
     }
     if (auto* Character = Cast<ACharacter>(Player)) Character->GetCharacterMovement()->StopMovementImmediately();
-    if (Checkpoint == 2 && Charger) Charger->RestartEncounter();
-    OnLocalRetry.Broadcast();
+    if (Checkpoint == 2 && Charger)
+    {
+        if (Ram && Ram->Hits < 2) Charger->RestartEncounter();
+        else Charger->SetEncounterActive(false);
+    }
     UpdateFlow();
+    OnLocalRetry.Broadcast();
     UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_FLOW] LocalRetry checkpoint=%d hits=%d"), Checkpoint, Ram ? Ram->Hits : 0);
     return true;
 }
@@ -807,11 +812,15 @@ FString ATransmitLevelDirector::GetObjectiveText() const
     {
     case ETransmitFlowStep::TakeMotion: return TEXT("Restore the crossing");
     case ETransmitFlowStep::GiveBridge: return TEXT("Give the motion to the bridge");
-    case ETransmitFlowStep::CrossBridge: return TEXT("Cross the moving bridge");
+    case ETransmitFlowStep::CrossBridge:
+        return Bridge && Bridge->GetActorLocation().X > 1500.0f
+            ? TEXT("Cross the bridge") : TEXT("Move the bridge into the gap");
     case ETransmitFlowStep::SendCarrier: return TEXT("Send motion through the low passage");
     case ETransmitFlowStep::ChaseCarrier: return TEXT("Follow your motion to the relay");
     case ETransmitFlowStep::RecaptureCarrier: return TEXT("Take the motion back");
-    case ETransmitFlowStep::RerouteCarrier: return TEXT("Turn the relay toward the dock");
+    case ETransmitFlowStep::RerouteCarrier:
+        return Ram && Ram->RouteCarrier && Ram->RouteCarrier->Motion->HasMotionState()
+            ? TEXT("Deliver the relay to the dock") : TEXT("Turn the relay toward the dock");
     case ETransmitFlowStep::ReachArena: return TEXT("Ram online. Reach the impact chamber");
     case ETransmitFlowStep::CaptureDash: return TEXT("Intercept a committed charge");
     case ETransmitFlowStep::PowerRam: return TEXT("Deliver the captured charge to the Ram");
@@ -830,11 +839,19 @@ FString ATransmitLevelDirector::GetHintText() const
     {
     case ETransmitFlowStep::TakeMotion: return TEXT("Aim at the moving source. E to capture.");
     case ETransmitFlowStep::GiveBridge: return TEXT("You are carrying it. Face across the gap; aim at the bridge and press Q.");
-    case ETransmitFlowStep::CrossBridge: return TEXT("The source stopped. The bridge now carries its motion.");
+    case ETransmitFlowStep::CrossBridge:
+        if (Bridge && (FMath::Abs(Bridge->GetActorLocation().Y) > 300.0f || Bridge->GetActorLocation().Z > 150.0f))
+            return TEXT("Off course. BACKSPACE restores the crossing; face across the gap before sending.");
+        return TEXT("The source stopped. The bridge now carries its motion.");
     case ETransmitFlowStep::SendCarrier: return TEXT("Take the nearby source with E. Face down the passage; Q to send the carrier.");
     case ETransmitFlowStep::ChaseCarrier: return TEXT("Motion takes the low route. You take the outer gallery.");
     case ETransmitFlowStep::RecaptureCarrier: return TEXT("Stand at the relay's south side. Aim at the carrier; E to capture again.");
-    case ETransmitFlowStep::RerouteCarrier: return TEXT("Face the dock across the relay. The preview shows the new direction. Q to send.");
+    case ETransmitFlowStep::RerouteCarrier:
+        if (Ram && Ram->RouteCarrier && Ram->RouteCarrier->Motion->HasMotionState())
+            return Ram->RouteCarrier->IsMovementActive()
+                ? TEXT("The relay carries the motion. Watch it connect to the Ram.")
+                : TEXT("Stopped short? Take it back with E, or BACKSPACE to retry this area.");
+        return TEXT("Face the dock across the relay. The preview shows the new direction. Q to send.");
     case ETransmitFlowStep::ReachArena: return TEXT("The delivered carrier armed the Ram. Follow the connected line.");
     case ETransmitFlowStep::CaptureDash: return TEXT("Wait for the dash, then E. Its direction stays locked.");
     case ETransmitFlowStep::PowerRam: case ETransmitFlowStep::BreakGate: return TEXT("Carry the charge around cover. Aim at the Ram and press Q.");
