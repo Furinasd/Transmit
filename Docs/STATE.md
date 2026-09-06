@@ -2,7 +2,22 @@
 
 > Operational snapshot, not design authority. Gameplay rules live in `DESIGN_CONTRACT.md`; architecture lives in `ARCHITECTURE.md`. Historical evidence remains in `Docs/dev/` and Git.
 
-Last inspected: 2026-09-06, integrated candidate ready for Ely's experience review.
+Last inspected: 2026-09-06, expanded pacing candidate awaiting human timing/experience acceptance.
+
+## Current pacing expansion
+
+- Working tree based on `67ed5cb`, `Jason/L_Transmit_v01`; this task has not committed or merged changes.
+- Four added bridge applications, three ordinary sources, a shared-resource reuse passage and twelve instruction signs. All 123 original actors remain, including the complete L2 and two-hit Boss chain. No visual polish or core-rule changes.
+- Only binary change: `Content/Transmit/Maps/L_Transmit.umap`. New PlayerStart is `(-10000,0,100)`.
+- Mac Editor build, saved-map Map Check (0 errors/warnings), 25/25 automation, real full traversal and combined failure/repeated-reset validation passed.
+- Scripted clean completion is **148.805 game seconds**, versus baseline 66.342s (+82.463s, 2.243x). This does **not** establish the 5–7 minute human target. The completion heading now shows full-run time including local retries.
+- Details, evidence, timing budget and open acceptance: `dev/20260906-ltransmit-pacing.md`.
+- New Mac package: `Saved/LTransmitCandidate/20260906-pacing-Mac/Transmit.app`. Build/Cook/Stage passed in 61.87s; signature verification passed. Standalone Metal SM6 startup rendered the new Learn practice area and native R restored the starting view/resources. Full standalone playthrough remains a human check. Do not use the old `ea081ff` package to judge this expansion.
+- Human gate: first-play duration, reuse comprehension, attention through the longer passages and text readability. The added-resource external-owner fallback has code review but no separate runtime induction in this suite.
+
+## Historical integrated candidate below
+
+The remaining snapshot describes the earlier `ea081ff` package and its provenance, not the expanded playable. Its successful checks are historical; the checks above correspond to this working tree.
 
 ## Current truth
 

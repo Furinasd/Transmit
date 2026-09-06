@@ -271,3 +271,9 @@ The formal content line is `Jason/L_Transmit_v01` (2026-09-06). Older implementa
 `OnFlowChanged` and `OnLocalRetry` fire after their observable state changes. Ram `OnArmed` fires after carrier permission locking; `OnImpact` fires after hit count and gate mutation. The HUD reads the director and actual interaction preview; it explains objectives and rejection without granting interaction eligibility. Dedicated presentation may observe these events and references but must not supply its own gameplay state.
 
 `Scripts/Editor/author_ltransmit_flow.py` patches the scoped formal map idempotently. The older full graybox builder is a historical bootstrap, not a safe way to update an authored candidate. Gameplay/resource checks, Editor authoring checks, and human readability acceptance are distinct evidence layers; current results belong in `STATE.md` rather than this architecture record.
+
+### Added practice and reuse passage (2026-09-06)
+
+`Scripts/Editor/extend_ltransmit_pacing.py` adds two introductory bridges and a post-dock passage containing two bridges that share one recoverable ordinary Motion. All use existing endpoint/slab capabilities. The original Learn, Route and Boss actors remain; the authoring script protects their transforms and only opens two baseline walls and relocates PlayerStart.
+
+The director observes concrete `Transmit.Pacing.LearnA/LearnB/RouteA/RouteB` tags for tutorial text. Actors tagged `Transmit.Pacing.Transition` form the narrow pre-arena retry group: their initial transforms and existing Motion snapshots are restored while the main dock and Ram stay complete. An externally held practice resource escalates to the existing full Reset. Entering the arena restores the original arena-retry behavior. The director never writes Motion state directly. Full-run timing resets on R, includes local retries and freezes for the completion heading.

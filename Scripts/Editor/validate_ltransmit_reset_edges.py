@@ -58,8 +58,11 @@ class ResetEdgeRun(TransmitRun):
     if isinstance(state, tuple): state = state[-1]
     owners.setdefault(str(state.source_id), []).append(actor.get_actor_label())
   self.emit('owners_after_reset', owners=owners)
-  assert len(owners) == 2 and all(len(v) == 1 for v in owners.values())
-  assert set(x for v in owners.values() for x in v) == {'Learn_Source', 'Route_Source'}
+  expected = {'Learn_Source', 'Route_Source'}
+  if 'Pacing_LearnSourceA' in self.a:
+   expected |= {'Pacing_LearnSourceA', 'Pacing_LearnSourceB', 'Pacing_RouteSource'}
+   assert abs(player.x + 10000) < 100
+  assert owners == {name: [name] for name in expected}
   return True
 
 TRANSMIT_RUN = ResetEdgeRun(globals().get('TRANSMIT_RESET_EDGE', 'ram'))

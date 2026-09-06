@@ -562,6 +562,7 @@ ATransmitLevelDirector::ATransmitLevelDirector()
 void ATransmitLevelDirector::BeginPlay()
 {
     Super::BeginPlay();
+    RunStartSeconds = GetWorld()->GetTimeSeconds();
 
     GetWorld()->GetTimerManager().SetTimerForNextTick(
         FTimerDelegate::CreateUObject(this, &ATransmitLevelDirector::BindDirectorRoomResetController));
@@ -614,6 +615,7 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
         && FVector::DistSquared(PlayerLocation, ExitMarker->GetActorLocation()) < ExitDistance * ExitDistance)
     {
         bCompletionShown = true;
+        CompletedRunSeconds = GetWorld()->GetTimeSeconds() - RunStartSeconds;
         SetFlowStep(ETransmitFlowStep::Complete);
 
         const float Elapsed = EncounterStartSeconds > 0.0f
@@ -621,6 +623,7 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
             : 0.0f;
 
         UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_PLAYABLE] L_Transmit gate broken: elapsed=%.1fs"), Elapsed);
+        UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_PLAYABLE] Full run including local retries: %.1fs"), CompletedRunSeconds);
 
         if (GEngine)
         {
@@ -642,6 +645,8 @@ void ATransmitLevelDirector::HandleDirectorPostRoomReset()
     bCompletionShown = false;
     SetFlowStep(ETransmitFlowStep::TakeMotion);
     EncounterStartSeconds = 0.0f;
+    RunStartSeconds = GetWorld()->GetTimeSeconds();
+    CompletedRunSeconds = 0.0f;
 
     APawn* Player = GetPlayerPawn();
     if (!Player)
@@ -665,6 +670,22 @@ void ATransmitLevelDirector::HandleDirectorPostRoomReset()
 
 void ATransmitLevelDirector::BindDirectorRoomResetController()
 {
+    // Cache the authored transition once, before the player can move its resources.
+    // Full-room reset already restores the Motion snapshots for these participants.
+    for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+    {
+        if (ATransmitBridgeSlab* Slab = Cast<ATransmitBridgeSlab>(*It))
+        {
+            for (const FName Tag : Slab->Tags)
+                if (Tag.ToString().StartsWith(TEXT("Transmit.Pacing."))) PacingBridges.Add(Tag, Slab);
+        }
+        if (!It->ActorHasTag(TEXT("Transmit.Pacing.Transition"))) continue;
+        auto* Motion = It->FindComponentByClass<UMotionTransferComponent>();
+        if (!Motion) continue;
+        PacingRetryActors.Add({*It, It->GetActorTransform()});
+        FMotionState State;
+        if (Motion->TryGetMotionState(State) && !State.SourceId.IsNone()) PacingResourceIds.AddUnique(State.SourceId);
+    }
     if (RouteSource)
     {
         RouteSourceStart = RouteSource->GetActorTransform();
@@ -747,6 +768,8 @@ bool ATransmitLevelDirector::RequestLocalRetry()
     auto* PlayerMotion = Player->FindComponentByClass<UMotionTransferComponent>();
     if (!PlayerMotion || PlayerMotion->IsTransactionInProgress() || PlayerMotion->IsDispatchingNotifications()) return false;
     if (Checkpoint == 0 || bCompletionShown) return TryRequestRoomReset();
+    if (Checkpoint == 2 && !bEntryTriggered && !PacingRetryActors.IsEmpty())
+        return RequestTransitionRetry(Player, PlayerMotion);
 
     // This is a level retry, not a new room snapshot: restore only this stage's
     // original resources. Completed bridge/dock and committed gate impacts remain.
@@ -801,14 +824,119 @@ bool ATransmitLevelDirector::RequestLocalRetry()
     return true;
 }
 
+bool ATransmitLevelDirector::RequestTransitionRetry(APawn* Player, UMotionTransferComponent* PlayerMotion)
+{
+    TArray<AActor*> RestoreActors;
+    for (const FPacingRetryActor& Saved : PacingRetryActors)
+    {
+        AActor* Actor = Saved.Actor.Get();
+        if (!Actor) return TryRequestRoomReset();
+        auto* Motion = Actor->FindComponentByClass<UMotionTransferComponent>();
+        if (!Motion || Motion->IsTransactionInProgress() || Motion->IsDispatchingNotifications()) return false;
+        RestoreActors.Add(Actor);
+    }
+    // An earlier actor can legally hold a practice resource. Never duplicate it.
+    for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+    {
+        if (*It == Player || RestoreActors.Contains(*It)) continue;
+        const auto* Motion = It->FindComponentByClass<UMotionTransferComponent>();
+        FMotionState State;
+        if (Motion && Motion->TryGetMotionState(State) && PacingResourceIds.Contains(State.SourceId))
+            return TryRequestRoomReset();
+    }
+    LastRetrySeconds = GetWorld()->GetTimeSeconds();
+    if (auto* Interactor = Player->FindComponentByClass<UMotionInteractorComponent>()) Interactor->ClearTarget();
+    PlayerMotion->RestoreInitialState(true);
+    for (const FPacingRetryActor& Saved : PacingRetryActors)
+    {
+        AActor* Actor = Saved.Actor.Get();
+        Actor->SetActorTransform(Saved.InitialTransform, false, nullptr, ETeleportType::TeleportPhysics);
+        Actor->FindComponentByClass<UMotionTransferComponent>()->RestoreInitialState(true);
+    }
+    Player->SetActorLocation(FVector(5350.0f, -650.0f, 100.0f), false, nullptr, ETeleportType::TeleportPhysics);
+    const FRotator Facing(0.0f, -90.0f, 0.0f);
+    Player->SetActorRotation(Facing);
+    if (Player->GetController()) Player->GetController()->SetControlRotation(Facing);
+    if (auto* Character = Cast<ACharacter>(Player)) Character->GetCharacterMovement()->StopMovementImmediately();
+    UpdateFlow();
+    OnLocalRetry.Broadcast();
+    UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_FLOW] TransitionRetry preserved dock and ram; restored=%d"), RestoreActors.Num());
+    return true;
+}
+
+bool ATransmitLevelDirector::GetPacingTutorial(FString& Chapter, FString& Objective, FString& Hint) const
+{
+    const APawn* Player = GetPlayerPawn();
+    if (!Player || bCompletionShown) return false;
+    const FVector Position = Player->GetActorLocation();
+    const auto SlabFor = [this](const FName Tag) -> ATransmitBridgeSlab*
+    {
+        const auto* Found = PacingBridges.Find(Tag);
+        return Found ? Found->Get() : nullptr;
+    };
+    const auto* Held = Player->FindComponentByClass<UMotionTransferComponent>();
+    const bool bLoaded = Held && Held->HasMotionState();
+    if (Position.X < -2500.0f && SlabFor(TEXT("Transmit.Pacing.LearnA")))
+    {
+        Chapter = TEXT("01 / LEARN - PRACTICE");
+        if (Position.X < -5500.0f)
+        {
+            const auto* Slab = SlabFor(TEXT("Transmit.Pacing.LearnA"));
+            Objective = Slab->Motion->HasMotionState() ? TEXT("Follow the bridge across")
+                : bLoaded ? TEXT("Give the motion to the first bridge") : TEXT("Take motion from the moving source");
+            Hint = TEXT("E takes motion; the source stops. Face across the gap and Q gives it to the bridge. BACKSPACE retries; R restarts everything.");
+        }
+        else
+        {
+            const auto* Slab = SlabFor(TEXT("Transmit.Pacing.LearnB"));
+            Objective = Slab && Slab->Motion->HasMotionState() ? TEXT("Cross the northbound bridge, then follow the passage")
+                : TEXT("Turn the next crossing north");
+            Hint = TEXT("Take the nearby source. Stand south of the bridge, face north and check the direction preview before Q. Motion follows the shown direction.");
+        }
+        return true;
+    }
+    if (Ram && Ram->bArmed && !bEntryTriggered && SlabFor(TEXT("Transmit.Pacing.RouteA")))
+    {
+        Chapter = TEXT("02 / ROUTE - REUSE");
+        const auto* First = SlabFor(TEXT("Transmit.Pacing.RouteA"));
+        const auto* Second = SlabFor(TEXT("Transmit.Pacing.RouteB"));
+        if (Second && Second->Motion->HasMotionState())
+        {
+            Objective = TEXT("Cross north and approach the impact chamber");
+            Hint = TEXT("You reused one motion for two crossings. Follow the north passage. The Boss telegraphs first; capture only its committed dash.");
+        }
+        else if (Position.X < 7100.0f)
+        {
+            Objective = First->Motion->HasMotionState() ? TEXT("Cross the service bridge") : TEXT("Follow the south gallery and restore its crossing");
+            Hint = TEXT("The Ram is armed. Follow the south passage to the next source; send its motion east into the service bridge.");
+        }
+        else
+        {
+            Objective = bLoaded ? TEXT("Carry the recovered motion to the northbound bridge") : TEXT("Take the motion back from the bridge you crossed");
+            Hint = bLoaded ? TEXT("Walk north to the next bridge. Stand south of it, face north and Q. The preview shows the new direction.")
+                : TEXT("From the far bank, aim back at the service bridge and E. Its motion can open another route; you do not need another source.");
+        }
+        return true;
+    }
+    return false;
+}
+
 FString ATransmitLevelDirector::GetChapterText() const
 {
-    if (bCompletionShown) return TEXT("TRANSMIT / CONNECTION RESTORED");
+    FString Chapter, Objective, Hint;
+    if (GetPacingTutorial(Chapter, Objective, Hint)) return Chapter;
+    if (bCompletionShown)
+    {
+        const int32 Seconds = FMath::FloorToInt(CompletedRunSeconds);
+        return FString::Printf(TEXT("TRANSMIT / CONNECTION RESTORED / %02d:%02d"), Seconds / 60, Seconds % 60);
+    }
     return Checkpoint == 0 ? TEXT("01 / LEARN") : Checkpoint == 1 ? TEXT("02 / ROUTE") : TEXT("03 / WEAPONIZE");
 }
 
 FString ATransmitLevelDirector::GetObjectiveText() const
 {
+    FString Chapter, Objective, Hint;
+    if (GetPacingTutorial(Chapter, Objective, Hint)) return Objective;
     switch (FlowStep)
     {
     case ETransmitFlowStep::TakeMotion: return TEXT("Restore the crossing");
@@ -838,6 +966,8 @@ FString ATransmitLevelDirector::GetObjectiveText() const
 
 FString ATransmitLevelDirector::GetHintText() const
 {
+    FString Chapter, Objective, Hint;
+    if (GetPacingTutorial(Chapter, Objective, Hint)) return Hint;
     if (GetWorld()->GetTimeSeconds() - LastRetrySeconds < 3.0f) return TEXT("Recovered here. Your completed work is safe.");
     switch (FlowStep)
     {

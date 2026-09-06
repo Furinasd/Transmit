@@ -244,10 +244,24 @@ private:
     bool bGateBrokenHandled = false;
     bool bCompletionShown = false;
     float EncounterStartSeconds = 0.0f;
+    float RunStartSeconds = 0.0f;
+    float CompletedRunSeconds = 0.0f;
 
     UFUNCTION()
     void HandleDirectorPostRoomReset();
 
+    // Authored pacing content uses tags; it does not add a gameplay contract.
+    struct FPacingRetryActor
+    {
+        TWeakObjectPtr<AActor> Actor;
+        FTransform InitialTransform;
+    };
+    TArray<FPacingRetryActor> PacingRetryActors;
+    TArray<FName> PacingResourceIds;
+    TMap<FName, TWeakObjectPtr<ATransmitBridgeSlab>> PacingBridges;
+
+    bool GetPacingTutorial(FString& Chapter, FString& Objective, FString& Hint) const;
+    bool RequestTransitionRetry(APawn* Player, UMotionTransferComponent* PlayerMotion);
     void UpdateFlow();
     void SetFlowStep(ETransmitFlowStep NewStep);
     void BindDirectorRoomResetController();
