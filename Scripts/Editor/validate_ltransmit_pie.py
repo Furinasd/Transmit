@@ -122,9 +122,21 @@ class TransmitRun:
    import traceback
    self.finish(False,traceback.format_exc())
  def finish(self,ok,reason):
+  if self.done:return
   self.done=True;unreal.unregister_slate_post_tick_callback(self.handle)
-  self.p.character_movement.stop_movement_immediately()
-  self.emit('complete',ok=ok,reason=reason,player=str(self.p.get_actor_location()))
+  # PIE may have ended before the callback: persist the failure even when its
+  # World/Pawn wrappers are invalid. Do not call emit(), which reads the World.
+  player=None
+  try:
+   self.p.character_movement.stop_movement_immediately()
+   player=str(self.p.get_actor_location())
+  except Exception as error:
+   ok=False;reason=str(reason)+'; PIE cleanup: '+str(error)
+  seconds=None
+  try:seconds=round(self.now()-self.start,3)
+  except Exception as error:ok=False;reason=str(reason)+'; World unavailable: '+str(error)
+  row=dict(event='complete',ok=ok,reason=reason,player=player,game_seconds=seconds,wall_seconds=round(time.monotonic()-self.real_start,3))
+  self.rows.append(row);unreal.log('TRANSMIT_RUN '+json.dumps(row,default=str))
   dest=pathlib.Path(unreal.Paths.project_saved_dir())/'LTransmitEvidence';dest.mkdir(parents=True,exist_ok=True)
   (dest/('run-'+str(int(time.time()))+'.json')).write_text(json.dumps(self.rows,indent=2,default=str))
 TRANSMIT_RUN=TransmitRun()

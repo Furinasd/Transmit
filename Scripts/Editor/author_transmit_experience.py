@@ -2,9 +2,12 @@
 No renderer/project settings, input assets or other maps are modified.
 """
 import unreal,pathlib,json,math
+import sys
+sys.path.insert(0, str(pathlib.Path(unreal.Paths.project_dir())/'Scripts/Editor'))
+from transmit_editor_safety import load_level_checked
 V=unreal.Vector;E=unreal.get_editor_subsystem(unreal.EditorActorSubsystem);L=unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 assert not L.is_in_play_in_editor();assert not unreal.EditorLoadingAndSavingUtils.get_dirty_content_packages();assert not unreal.EditorLoadingAndSavingUtils.get_dirty_map_packages()
-assert L.load_level('/Game/Transmit/Maps/L_Transmit')
+load_level_checked('/Game/Transmit/Maps/L_Transmit')
 a={x.get_actor_label():x for x in E.get_all_level_actors()};out=pathlib.Path(unreal.Paths.project_saved_dir())/'LTransmitEvidence/Experience';out.mkdir(parents=True,exist_ok=True)
 cube=unreal.load_asset('/Engine/BasicShapes/Cube');changed=[]
 def box(n,p,size,mat='/Game/Transmit/Presentation/Materials/M_Ceramic',collision=True):

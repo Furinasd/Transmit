@@ -9,13 +9,15 @@ import pathlib
 import time
 import traceback
 import unreal
+import sys
 
 ROOT = pathlib.Path(unreal.Paths.project_dir())
 OUT = ROOT / 'Saved/LTransmitEvidence/Wayfinding'
 OUT.mkdir(parents=True, exist_ok=True)
-unreal.EditorPythonScripting.set_keep_python_script_alive(True)
+sys.path.insert(0, str(ROOT / 'Scripts/Editor'))
+from transmit_editor_safety import CallbackOwner, load_level_checked
 LEVELS = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
-assert LEVELS.load_level('/Game/Transmit/Maps/L_Transmit')
+load_level_checked('/Game/Transmit/Maps/L_Transmit')
 WORLD = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
 editor_actors = {a.get_actor_label(): a for a in unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()}
 assert len([n for n in editor_actors if n.startswith('Wayfinding_')]) > 50
@@ -40,6 +42,8 @@ def tick(dt):
     try:
         world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_game_world()
         if not world or not unreal.GameplayStatics.get_player_pawn(world, 0):
+            if runner is not None:
+                raise RuntimeError('PIE ended before the suite completed')
             assert time.monotonic()-started < 90, 'PIE startup timeout'
             return
         if runner is None:
@@ -52,7 +56,7 @@ def tick(dt):
             index += 1
             (OUT / 'suite.json').write_text(json.dumps(results, indent=2))
             if not result['ok'] or index == len(FILES):
-                unreal.unregister_slate_post_tick_callback(handle)
+                callbacks.close()
                 LEVELS.editor_request_end_play()
                 unreal.log('TRANSMIT_WAYFINDING_SUITE_FINISHED ' + json.dumps(results))
             else:
@@ -66,7 +70,10 @@ def tick(dt):
     except Exception:
         (OUT / 'error.txt').write_text(traceback.format_exc())
         unreal.log_error(traceback.format_exc())
-        unreal.unregister_slate_post_tick_callback(handle)
+        if runner is not None and not runner.done:
+            runner.finish(False, 'suite interrupted')
+        callbacks.close()
         LEVELS.editor_request_end_play()
 
-handle = unreal.register_slate_post_tick_callback(tick)
+callbacks = CallbackOwner(keep_alive=True)
+handle = callbacks.register(tick)

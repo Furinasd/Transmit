@@ -490,6 +490,29 @@ Every plan must include a clear Definition of Done.
 
 ## 11. Validation
 
+### Editor automation lifecycle (Mac crash follow-up)
+
+Use `Scripts/Editor/transmit_editor_safety.py` for guarded map loads and owned
+callback cleanup. Skip a redundant reload; reject PIE and dirty packages before
+switching maps. Release Python World/Actor references and stop owned callbacks
+before a deliberate cross-map transition. Never duplicate a World with generic
+`duplicate_asset`; use `new_level_from_template` for preview maps.
+
+Every long-lived probe must have success, exception, timeout and early-PIE-stop
+cleanup. Persist failures even after World/Pawn destruction. Release only the
+keep-alive and callbacks owned by that suite. Do not use SIGTERM/kill as routine
+Editor completion; stop PIE, check dirty packages, and request Editor-native
+quit in an owned process. For `-ExecutePythonScript`, release keep-alive and let
+the executor's next tick destroy its notification and defer quit; do not call
+`quit_editor()` immediately in the cleanup callback. A test success marker is
+not a successful process exit.
+
+Preserve matching crash context, log, launch mode and exit result. Redact account
+IDs, authentication arguments and personal paths before public issue uploads.
+Classify original Editor crashes separately from CrashReportClient failures.
+See `Docs/dev/20260907-mac-editor-crashes.md`; mitigation is not proof of an
+engine fix. Do not assume unattended mode or changing language fixes this crash.
+
 Compilation success is not gameplay success.
 
 Asset creation success is not level-design success.
