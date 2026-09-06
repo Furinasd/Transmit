@@ -2,11 +2,20 @@
 
 > Operational snapshot, not design authority. Gameplay rules live in `DESIGN_CONTRACT.md`; architecture lives in `ARCHITECTURE.md`. Historical evidence remains in `Docs/dev/` and Git.
 
-Last inspected: 2026-09-06, expanded pacing candidate awaiting human timing/experience acceptance.
+Last inspected: 2026-09-07, integrated presentation and wayfinding checkpoint awaiting human timing/experience acceptance.
 
-## Current pacing expansion
+## Current wayfinding checkpoint
 
-- Working tree based on `67ed5cb`, `Jason/L_Transmit_v01`; this task has not committed or merged changes.
+- Integration line: `Jason/L_Transmit_v01`, combining saved pacing `003d497` with `Jason/presentation-juice` at `5d6b4d9`. The expanded map is retained; the other branch's geometry/backdrop edits are replayed through Editor.
+- Added continuous neutral route marks, four safe bridge operating positions, a reverse-facing reclaim position and 11 low transit guards. Revised eight signs, moved seven text-only signs away from the walking/camera line and added 12 non-colliding sign backplates. Fixed practice/return/reuse HUD stage instructions.
+- All gameplay actor transforms, existing Beats, L2, Boss, resources and retry rules remain. Only binary change is `Content/Transmit/Maps/L_Transmit.umap`; Blueprint/material assets and project settings are unchanged.
+- Mac Editor build, 25/25 automation, clean traversal (148.754s), combined recovery (178.393s), final feedback traversal/reset cancellation (165.923s) and final map/sign readback passed. Map Check: 0 errors / 0 warnings. Previous comparable clean baseline: 148.805s. Details: `dev/20260907-ltransmit-wayfinding.md`.
+- Current entry is the saved `L_Transmit` in Mac Editor. The `20260906-pacing-Mac` standalone package predates this checkpoint and must not be used to assess these changes.
+- Human acceptance still includes 5–7 minute first-play pacing, independent route/resource-reuse understanding, preferred-resolution text readability and camera comfort. See the checkpoint report for evidence and remaining gates.
+
+## Previous pacing expansion
+
+- Saved as `003d497` on `Jason/L_Transmit_v01`, based on `67ed5cb`.
 - Four added bridge applications, three ordinary sources, a shared-resource reuse passage and twelve instruction signs. All 123 original actors remain, including the complete L2 and two-hit Boss chain. No visual polish or core-rule changes.
 - Only binary change: `Content/Transmit/Maps/L_Transmit.umap`. New PlayerStart is `(-10000,0,100)`.
 - Mac Editor build, saved-map Map Check (0 errors/warnings), 25/25 automation, real full traversal and combined failure/repeated-reset validation passed.

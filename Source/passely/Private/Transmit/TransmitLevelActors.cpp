@@ -879,19 +879,26 @@ bool ATransmitLevelDirector::GetPacingTutorial(FString& Chapter, FString& Object
     if (Position.X < -2500.0f && SlabFor(TEXT("Transmit.Pacing.LearnA")))
     {
         Chapter = TEXT("01 / LEARN - PRACTICE");
-        if (Position.X < -5500.0f)
+        if (Position.Y > 2600.0f)
+        {
+            Objective = TEXT("Follow the passage to the final practice crossing");
+            Hint = TEXT("Follow the white route marks: east at the landing, south at the next corner. E can recover a slab's motion if you need to correct its direction.");
+        }
+        else if (Position.X < -6100.0f)
         {
             const auto* Slab = SlabFor(TEXT("Transmit.Pacing.LearnA"));
             Objective = Slab->Motion->HasMotionState() ? TEXT("Follow the bridge across")
                 : bLoaded ? TEXT("Give the motion to the first bridge") : TEXT("Take motion from the moving source");
-            Hint = TEXT("E takes motion; the source stops. Face across the gap and Q gives it to the bridge. BACKSPACE retries; R restarts everything.");
+            Hint = TEXT("E takes motion; the source stops. Stay on the bank, face across the gap and Q gives it to the bridge. Wait for it to stop before crossing. BACKSPACE retries; R restarts all.");
         }
         else
         {
             const auto* Slab = SlabFor(TEXT("Transmit.Pacing.LearnB"));
             Objective = Slab && Slab->Motion->HasMotionState() ? TEXT("Cross the northbound bridge, then follow the passage")
                 : TEXT("Turn the next crossing north");
-            Hint = TEXT("Take the nearby source. Stand south of the bridge, face north and check the direction preview before Q. Motion follows the shown direction.");
+            Hint = Slab && Slab->Motion->HasMotionState()
+                ? TEXT("Wait for the slab to stop, then cross north. At the far landing, the white route turns right toward the next crossing.")
+                : TEXT("Take the nearby source. Use the white operating mark SOUTH of the slab. Face north and check the arrow before Q; stay on the bank while it moves.");
         }
         return true;
     }
@@ -905,10 +912,14 @@ bool ATransmitLevelDirector::GetPacingTutorial(FString& Chapter, FString& Object
             Objective = TEXT("Cross north and approach the impact chamber");
             Hint = TEXT("You reused one motion for two crossings. Follow the north passage. The Boss telegraphs first; capture only its committed dash.");
         }
-        else if (Position.X < 7100.0f)
+        else if (Position.X < 6900.0f)
         {
-            Objective = First->Motion->HasMotionState() ? TEXT("Cross the service bridge") : TEXT("Follow the south gallery and restore its crossing");
-            Hint = TEXT("The Ram is armed. Follow the south passage to the next source; send its motion east into the service bridge.");
+            Objective = First->Motion->HasMotionState() ? TEXT("Cross the service bridge")
+                : bLoaded ? TEXT("Give the carried motion from the west bank") : TEXT("Follow the south gallery and restore its crossing");
+            Hint = First->Motion->HasMotionState()
+                ? TEXT("Wait for the slab to stop, cross east, then E to take its motion back from the far bank. The next bridge has no source.")
+                : bLoaded ? TEXT("Stand on the white mark WEST of the slab, facing east. Q sends it across. Stay on the bank while it moves.")
+                : TEXT("The Ram is armed. Follow the white marks south, then turn right to the source and the west-bank operating mark.");
         }
         else
         {
