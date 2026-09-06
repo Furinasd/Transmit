@@ -56,9 +56,9 @@ Motion State is gameplay-authored motion, not a promise of strict mass, friction
 ### Ordinary Linear — CameraCanonical (unchanged v0.3 policy)
 
 - **Capture preserves Source Motion**: direction and magnitude are taken from the Source unchanged.
-- **Transfer reroutes by gameplay camera**: the carried Linear direction is interpreted against the gameplay camera and quantized to exactly one of Forward / Back / Left / Right / Up / Down; the Target receives the resolved world direction.
+- **Transfer reroutes by gameplay camera**: the gameplay camera directly selects a fixed world direction: yaw 0 → +X / Forward, +90 → +Y / Right, 180 → -X / Back, -90 → -Y / Left; pitch entering Up / Down selects +Z / -Z. Incoming ordinary Source direction is preserved through Capture and Carry but never selects the Transfer output. This camera-authored correction supersedes the source-relative v0.3 interpretation.
 - **One resolver, one result**: the same Canonical Direction Resolver drives Preview and Commit. Preview and Transfer may never compute direction or compatibility with different rules.
-- **Deterministic and hysteresis-guarded**: horizontal four directions come from camera yaw; Up / Down use an explicit pitch threshold; boundaries keep hysteresis so Forward ↔ Up and adjacent horizontal sectors do not flicker. Identical camera pose + identical carried direction must produce an identical result.
+- **Deterministic and hysteresis-guarded**: horizontal four directions come from camera yaw; Up / Down use an explicit pitch threshold; boundaries keep hysteresis so Forward ↔ Up and adjacent horizontal sectors do not flicker. Identical camera pose and hysteresis history produce identical output for every valid incoming ordinary direction.
 - **Scope**: CameraCanonical applies to Ordinary Linear Motion. It is the default Transfer policy, not a rule that overrides promoted Motion-specific exceptions.
 
 ### Directional Carrier (promoted, not implemented)

@@ -133,7 +133,7 @@ Soft-cone assistance and short target stickiness belong here. The transaction la
 
 Target selection and direction resolution are physically decoupled. Direction policy is a property of the carried Motion, not of the camera or the Target:
 
-- **Ordinary Linear — CameraCanonical**: `UMotionCanonicalDirectionResolver` maps (carried Linear direction + gameplay camera pose) → one of six canonical directions and a world-space `ProjectedWorldDirection`, with pitch and sector hysteresis. This is the implemented, frozen v0.3 resolver.
+- **Ordinary Linear — CameraCanonical**: `UMotionCanonicalDirectionResolver` quantizes gameplay camera yaw against fixed world X/Y axes and camera pitch against Up/Down thresholds, producing one of six world-axis `ProjectedWorldDirection` values with the existing hysteresis model. Carried direction is validated as state data, not used for selection; Capture/Carry retain it. The source-relative v0.3 interpretation is corrected by the 2026-09-06 human-PIE finding.
 - **Boss High Motion — PreserveSource**: direction stays locked to the committed Charger Dash world direction and bypasses the camera resolver. This policy is promoted by v0.4 and not implemented; current code carries no explicit direction-policy marker, so captured Dash Motion still enters CameraCanonical on Transfer. The policy must not be inferred from magnitude or `SourceId`.
 - **Preview = Commit is policy-independent**: whichever policy applies, the interactor computes the world direction once and carries it inside `FMotionTransferContext.DirectionResolution`; Preview and Commit consume the same result.
 - **`RequiredCanonicalDirection`**: receivers may declare one of the six canonical directions; a mismatch is `IncompatibleDirection` and never consumes Player Motion. This is a compatibility/regression capability, not the Zone 2 core mechanic.
@@ -168,7 +168,7 @@ Transfer input
 Resolve IMotionTransferable Target
         ↓
 Determine direction policy from the carried Motion
-        ├── Ordinary Linear → CameraCanonical: carried direction + gameplay camera
+        ├── Ordinary Linear → CameraCanonical: gameplay camera yaw / pitch
         │         → one of Forward / Back / Left / Right / Up / Down
         └── Boss High Motion → PreserveSource: committed Dash world direction
                               [v0.4 promoted; not yet implemented]

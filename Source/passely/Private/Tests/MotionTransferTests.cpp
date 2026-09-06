@@ -363,65 +363,12 @@ bool FMotionCanonicalResolverTest::RunTest(const FString& Parameters)
         TEXT("Forward world direction is +X"),
         Forward.WorldDirection.Equals(FVector::ForwardVector, 1e-3f));
 
-    const FMotionDirectionResolution Back =
-        Resolver->ResolveDirection(FVector::BackwardVector, CameraYawZero);
-    TestTrue(
-        TEXT("Back resolves to Back"),
-        Back.bValid && Back.CanonicalDirection == EMotionCanonicalDirection::Back);
-
-    const FMotionDirectionResolution Right =
-        Resolver->ResolveDirection(FVector::RightVector, CameraYawZero);
-    TestTrue(
-        TEXT("Right resolves to Right"),
-        Right.bValid && Right.CanonicalDirection == EMotionCanonicalDirection::Right);
-    TestTrue(
-        TEXT("Right world direction is +Y"),
-        Right.WorldDirection.Equals(FVector::RightVector, 1e-3f));
-
-    const FMotionDirectionResolution Left =
-        Resolver->ResolveDirection(FVector::LeftVector, CameraYawZero);
-    TestTrue(
-        TEXT("Left resolves to Left"),
-        Left.bValid && Left.CanonicalDirection == EMotionCanonicalDirection::Left);
-
-    const FMotionDirectionResolution Up =
-        Resolver->ResolveDirection(FVector::UpVector, CameraYawZero);
-    TestTrue(
-        TEXT("Up resolves to Up"),
-        Up.bValid && Up.CanonicalDirection == EMotionCanonicalDirection::Up);
-    TestTrue(
-        TEXT("Up world direction is +Z"),
-        Up.WorldDirection.Equals(FVector::UpVector, 1e-3f));
-
-    const FMotionDirectionResolution Down =
-        Resolver->ResolveDirection(FVector::DownVector, CameraYawZero);
-    TestTrue(
-        TEXT("Down resolves to Down"),
-        Down.bValid && Down.CanonicalDirection == EMotionCanonicalDirection::Down);
-
-    // Camera yaw changes the horizontal basis: +X becomes Left when the camera faces +Y.
+    Resolver->ResetHysteresis();
     const FMotionDirectionResolution Yawed =
         Resolver->ResolveDirection(FVector::ForwardVector, CameraYawRight);
-    TestTrue(
-        TEXT("Camera yaw maps +X to Left"),
-        Yawed.bValid && Yawed.CanonicalDirection == EMotionCanonicalDirection::Left);
-    TestTrue(
-        TEXT("Camera yaw keeps world direction +X"),
-        Yawed.WorldDirection.Equals(FVector::ForwardVector, 1e-3f));
-
-    // Camera pitch is the player's Up/Down selection: a horizontal carried
-    // direction becomes Up when the camera looks up by the enter threshold.
-    Resolver->ResetHysteresis();
-    const FRotator CameraPitchUp(50.0f, 0.0f, 0.0f);
-    const FMotionDirectionResolution UpByCamera =
-        Resolver->ResolveDirection(FVector::ForwardVector, CameraPitchUp);
-    TestTrue(
-        TEXT("Camera pitch resolves a horizontal carried state to Up"),
-        UpByCamera.bValid
-            && UpByCamera.CanonicalDirection == EMotionCanonicalDirection::Up);
-    TestTrue(
-        TEXT("Camera pitch Up keeps world direction +Z"),
-        UpByCamera.WorldDirection.Equals(FVector::UpVector, 1e-3f));
+    TestTrue(TEXT("Camera yaw selects world +Y / Right"),
+        Yawed.bValid && Yawed.CanonicalDirection == EMotionCanonicalDirection::Right
+            && Yawed.WorldDirection.Equals(FVector::RightVector, 1e-3f));
 
     // Identical pose and input must resolve identically.
     Resolver->ResetHysteresis();
@@ -434,69 +381,10 @@ bool FMotionCanonicalResolverTest::RunTest(const FString& Parameters)
         DeterministicA.CanonicalDirection == DeterministicB.CanonicalDirection
             && DeterministicA.WorldDirection.Equals(DeterministicB.WorldDirection, 1e-3f));
 
-    // Pitch hysteresis: entering Up requires 45 degrees; leaving Up requires < 35.
-    Resolver->ResetHysteresis();
-    Resolver->ResolveDirection(FVector::UpVector, CameraYawZero);
-    const FVector Dir40 = FVector(
-        FMath::Cos(FMath::DegreesToRadians(40.0f)),
-        0.0f,
-        FMath::Sin(FMath::DegreesToRadians(40.0f)));
-    const FMotionDirectionResolution StayUp =
-        Resolver->ResolveDirection(Dir40, CameraYawZero);
-    TestTrue(
-        TEXT("Up is kept above the exit threshold"),
-        StayUp.bValid && StayUp.CanonicalDirection == EMotionCanonicalDirection::Up);
-    const FVector Dir30 = FVector(
-        FMath::Cos(FMath::DegreesToRadians(30.0f)),
-        0.0f,
-        FMath::Sin(FMath::DegreesToRadians(30.0f)));
-    const FMotionDirectionResolution ExitUp =
-        Resolver->ResolveDirection(Dir30, CameraYawZero);
-    TestTrue(
-        TEXT("Up exits below the exit threshold"),
-        ExitUp.bValid && ExitUp.CanonicalDirection == EMotionCanonicalDirection::Forward);
-
-    Resolver->ResetHysteresis();
-    const FMotionDirectionResolution BelowEnter =
-        Resolver->ResolveDirection(Dir40, CameraYawZero);
-    TestTrue(
-        TEXT("Horizontal is kept below the enter threshold"),
-        BelowEnter.bValid
-            && BelowEnter.CanonicalDirection == EMotionCanonicalDirection::Forward);
-    const FVector Dir50 = FVector(
-        FMath::Cos(FMath::DegreesToRadians(50.0f)),
-        0.0f,
-        FMath::Sin(FMath::DegreesToRadians(50.0f)));
-    const FMotionDirectionResolution EnterUp =
-        Resolver->ResolveDirection(Dir50, CameraYawZero);
-    TestTrue(
-        TEXT("Up is entered above the enter threshold"),
-        EnterUp.bValid && EnterUp.CanonicalDirection == EMotionCanonicalDirection::Up);
-
-    // Horizontal hysteresis keeps the previous sector inside the boundary band.
-    Resolver->ResetHysteresis();
-    Resolver->ResolveDirection(FVector::RightVector, CameraYawZero);
-    const FVector Dir40TowardForward = FVector(
-        FMath::Cos(FMath::DegreesToRadians(40.0f)),
-        FMath::Sin(FMath::DegreesToRadians(40.0f)),
-        0.0f);
-    const FMotionDirectionResolution KeepRight =
-        Resolver->ResolveDirection(Dir40TowardForward, CameraYawZero);
-    TestTrue(
-        TEXT("Right is kept inside the horizontal hysteresis band"),
-        KeepRight.bValid && KeepRight.CanonicalDirection == EMotionCanonicalDirection::Right);
-
-    Resolver->ResetHysteresis();
-    Resolver->ResolveDirection(FVector::ForwardVector, CameraYawZero);
-    const FVector Dir50TowardRight = FVector(
-        FMath::Cos(FMath::DegreesToRadians(50.0f)),
-        FMath::Sin(FMath::DegreesToRadians(50.0f)),
-        0.0f);
-    const FMotionDirectionResolution KeepForward =
-        Resolver->ResolveDirection(Dir50TowardRight, CameraYawZero);
-    TestTrue(
-        TEXT("Forward is kept inside the horizontal hysteresis band"),
-        KeepForward.bValid && KeepForward.CanonicalDirection == EMotionCanonicalDirection::Forward);
+    TestFalse(TEXT("Zero input remains invalid state data"),
+        Resolver->ResolveDirection(FVector::ZeroVector, CameraYawZero).bValid);
+    // Camera-authored world matrix and both hysteresis sweeps are covered by
+    // CameraAuthored tests, independent of incoming Motion direction.
 
     ReleaseResolver(Resolver);
     return true;
@@ -787,8 +675,9 @@ bool FMotionDirectionPolicyOrdinaryCameraTest::RunTest(const FString& Parameters
     TestTrue(TEXT("CameraCanonical stays valid after camera yaw"), Yawed.bValid);
     TestTrue(
         TEXT("CameraCanonical canonical output changes with camera yaw"),
-        Yawed.CanonicalDirection == EMotionCanonicalDirection::Left
-            && Yawed.CanonicalDirection != Forward.CanonicalDirection);
+        Yawed.CanonicalDirection == EMotionCanonicalDirection::Right
+            && Yawed.CanonicalDirection != Forward.CanonicalDirection
+            && Yawed.WorldDirection.Equals(FVector::RightVector, 1e-3f));
 
     Resolver->ResetHysteresis();
     const FRotator CameraPitchUp(50.0f, 0.0f, 0.0f);
@@ -1042,7 +931,8 @@ bool FMotionPreserveSourceDirectionPolicyTest::RunTest(const FString& Parameters
         TEXT("Post-Reset ordinary Motion is camera-driven again"),
         OrdinaryAfterReset.bValid
             && OrdinaryAfterReset.CanonicalDirection
-                == EMotionCanonicalDirection::Left);
+                == EMotionCanonicalDirection::Right
+            && OrdinaryAfterReset.WorldDirection.Equals(FVector::RightVector, 1e-3f));
 
     ReleaseComponent(OrdinarySource);
     ReleaseEndpointActor(UpReceiverActor);

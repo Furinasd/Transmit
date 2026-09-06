@@ -1,7 +1,5 @@
 #include "Motion/MotionCanonicalDirectionResolver.h"
 
-#include "Math/RotationMatrix.h"
-
 UMotionCanonicalDirectionResolver::UMotionCanonicalDirectionResolver()
 {
 }
@@ -47,18 +45,16 @@ FMotionDirectionResolution UMotionCanonicalDirectionResolver::ResolveDirectionDe
         return FMotionDirectionResolution::Invalid();
     }
 
+    // Retain the legacy parameter for API/asset compatibility. Six-direction
+    // CameraCanonical always returns world Z for Up/Down.
+    (void)bInUseWorldUpForUpDown;
     const FVector WorldUp = FVector::UpVector;
 
-    // Up/Down is a camera-pitch decision: the player selects the output
-    // canonical direction by looking up or down, independent of whether the
-    // carried state already points vertically. The carried input's own
-    // vertical angle is retained as a secondary source so vertical Sources
-    // remain resolvable with a level camera.
-    const float InputPitchDegrees = FMath::RadiansToDegrees(
-        FMath::Asin(FMath::Clamp(FVector::DotProduct(Input, WorldUp), -1.0f, 1.0f)));
-    const float CameraPitchDegrees = CameraRotation.Pitch;
-    const float UpPitchScore = FMath::Max(InputPitchDegrees, CameraPitchDegrees);
-    const float DownPitchScore = FMath::Max(-InputPitchDegrees, -CameraPitchDegrees);
+    // Source direction remains valid carry-state data, but never selects output.
+    // Both horizontal sectors and vertical thresholds are camera-authored.
+    const float CameraPitchDegrees = FRotator::NormalizeAxis(CameraRotation.Pitch);
+    const float UpPitchScore = CameraPitchDegrees;
+    const float DownPitchScore = -CameraPitchDegrees;
 
     const float UpEnter = FMath::Clamp(InUpEnterPitchDegrees, 1.0f, 89.0f);
     const float UpExit = FMath::Clamp(InUpExitPitchDegrees, 0.0f, UpEnter);
@@ -69,13 +65,13 @@ FMotionDirectionResolution UMotionCanonicalDirectionResolver::ResolveDirectionDe
         {
             return FMotionDirectionResolution::Make(
                 EMotionCanonicalDirection::Up,
-                bInUseWorldUpForUpDown ? WorldUp : CameraRotation.RotateVector(FVector::UpVector));
+                WorldUp);
         }
         if (DownPitchScore >= UpEnter)
         {
             return FMotionDirectionResolution::Make(
                 EMotionCanonicalDirection::Down,
-                bInUseWorldUpForUpDown ? -WorldUp : -CameraRotation.RotateVector(FVector::UpVector));
+                -WorldUp);
         }
     }
     else if (PreviousDirection == EMotionCanonicalDirection::Down)
@@ -84,13 +80,13 @@ FMotionDirectionResolution UMotionCanonicalDirectionResolver::ResolveDirectionDe
         {
             return FMotionDirectionResolution::Make(
                 EMotionCanonicalDirection::Down,
-                bInUseWorldUpForUpDown ? -WorldUp : -CameraRotation.RotateVector(FVector::UpVector));
+                -WorldUp);
         }
         if (UpPitchScore >= UpEnter)
         {
             return FMotionDirectionResolution::Make(
                 EMotionCanonicalDirection::Up,
-                bInUseWorldUpForUpDown ? WorldUp : CameraRotation.RotateVector(FVector::UpVector));
+                WorldUp);
         }
     }
     else
@@ -99,28 +95,23 @@ FMotionDirectionResolution UMotionCanonicalDirectionResolver::ResolveDirectionDe
         {
             return FMotionDirectionResolution::Make(
                 EMotionCanonicalDirection::Up,
-                bInUseWorldUpForUpDown ? WorldUp : CameraRotation.RotateVector(FVector::UpVector));
+                WorldUp);
         }
         if (DownPitchScore >= UpEnter)
         {
             return FMotionDirectionResolution::Make(
                 EMotionCanonicalDirection::Down,
-                bInUseWorldUpForUpDown ? -WorldUp : -CameraRotation.RotateVector(FVector::UpVector));
+                -WorldUp);
         }
     }
 
-    // Horizontal basis comes from camera yaw only; this keeps the four horizontal
-    // directions stable when the camera pitches, and Up/Down stay world-aligned.
-    const FRotator YawOnly(0.0f, CameraRotation.Yaw, 0.0f);
-    const FVector Forward = YawOnly.Vector().GetSafeNormal();
-    if (Forward.IsNearlyZero())
-    {
-        return FMotionDirectionResolution::Invalid();
-    }
-    const FVector Right = FRotationMatrix(YawOnly).GetUnitAxis(EAxis::Y).GetSafeNormal();
-
-    const float ForwardScore = FVector::DotProduct(Input, Forward);
-    const float RightScore = FVector::DotProduct(Input, Right);
+    // Quantize gameplay camera yaw against fixed world axes, not the carried
+    // vector against a rotating camera basis. Canonical outputs are world-fixed.
+    const FVector Forward = FVector::ForwardVector;
+    const FVector Right = FVector::RightVector;
+    const FVector CameraForward = FRotator(0.0f, CameraRotation.Yaw, 0.0f).Vector();
+    const float ForwardScore = FVector::DotProduct(CameraForward, Forward);
+    const float RightScore = FVector::DotProduct(CameraForward, Right);
 
     EMotionCanonicalDirection Best = EMotionCanonicalDirection::Forward;
     float BestScore = ForwardScore;
