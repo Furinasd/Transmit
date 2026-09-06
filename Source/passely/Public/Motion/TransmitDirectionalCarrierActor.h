@@ -10,6 +10,7 @@
 class UCapsuleComponent;
 class UStaticMeshComponent;
 class UMotionTransferComponent;
+class ATransmitRam;
 
 UCLASS(BlueprintType, Blueprintable)
 class PASSELY_API ATransmitDirectionalCarrierActor : public AActor, public IMotionTransferable
@@ -20,6 +21,8 @@ public:
     ATransmitDirectionalCarrierActor();
 
     virtual void Tick(float DeltaSeconds) override;
+    void SetRailController(ATransmitRam* Controller);
+    virtual FMotionCompatibilityResult CanReceiveMotion_Implementation(const FMotionState& State, const FMotionTransferContext& Context) const override;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")
     TObjectPtr<UMotionTransferComponent> Motion;
@@ -45,6 +48,7 @@ protected:
     virtual void BeginPlay() override;
 
 private:
+    TWeakObjectPtr<ATransmitRam> RailController;
     bool bMovementActive = false;
     bool bBlockedByCollision = false;
     bool bHadMotionLastFrame = false;

@@ -15,7 +15,9 @@ public class passely : ModuleRules
                 "EnhancedInput",
                 "Engine",
                 "GameplayTags",
-                "InputCore"
+                "InputCore",
+                "Slate",
+                "SlateCore"
             }
         );
     }

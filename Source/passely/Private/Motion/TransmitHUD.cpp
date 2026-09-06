@@ -1,7 +1,12 @@
 #include "Motion/TransmitHUD.h"
+#include "CanvasItem.h"
+#include "Styling/CoreStyle.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Fonts/FontMeasure.h"
 
 #include "Components/ArrowComponent.h"
 #include "Engine/Canvas.h"
+#include "Engine/Font.h"
 #include "Engine/Engine.h"
 #include "InputCoreTypes.h"
 #include "EngineUtils.h"
@@ -78,22 +83,38 @@ void ATransmitHUD::DrawHUD()
     const float Scale = FMath::Clamp(FMath::Min(Canvas->SizeX / 1440.0f, Canvas->SizeY / 900.0f), 0.65f, 1.5f);
     const float Margin = 32.0f * Scale;
     const bool bHelp = PlayerOwner->IsInputKeyDown(EKeys::Tab);
-    const auto Label = [this, Scale](const FString& Text, float X, float Y, float Size, FLinearColor Color)
+    if (!RuntimeFont)
     {
-        DrawText(Text, Color, X, Y, GEngine->GetMediumFont(), Size * Scale);
+        RuntimeFont = NewObject<UFont>(this);
+        RuntimeFont->FontCacheType = EFontCacheType::Runtime;
+        RuntimeFont->GetMutableInternalCompositeFont() = *FCoreStyle::GetDefaultFontStyle("Regular", 12).GetCompositeFont();
+    }
+    const auto Font = [this, Scale](float Size)
+    {
+        FSlateFontInfo Info = FCoreStyle::GetDefaultFontStyle("Regular", FMath::RoundToInt(12 * Size * Scale));
+        // Canvas requires a UFont even when Slate supplies the composite typeface.
+        Info.FontObject = RuntimeFont;
+        return Info;
     };
-    const auto Wrapped = [this, Scale](const FString& Text, float Width, float Size)
+    const auto Measure = [&Font](const FString& Text, float Size) -> FVector2D
     {
-        TArray<FString> Words, Lines;
-        Text.ParseIntoArrayWS(Words);
+        return FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Text, Font(Size));
+    };
+    const auto Label = [this, &Font](const FString& Text, float X, float Y, float Size, FLinearColor Color)
+    {
+        FCanvasTextItem Item(FVector2D(X,Y), FText::FromString(Text), Font(Size), Color);
+        Canvas->DrawItem(Item);
+    };
+    const auto Wrapped = [&Measure](const FString& Text, float Width, float Size)
+    {
+        TArray<FString> Lines;
         FString Line;
-        for (const FString& Word : Words)
+        for (const TCHAR Character : Text)
         {
-            const FString Next = Line.IsEmpty() ? Word : Line + TEXT(" ") + Word;
-            float W = 0, H = 0;
-            GetTextSize(Next, W, H, GEngine->GetMediumFont(), Size * Scale);
-            if (!Line.IsEmpty() && W > Width) { Lines.Add(Line); Line = Word; }
-            else Line = Next;
+            const FString Next = Line + FString::Chr(Character);
+            if (!Line.IsEmpty() && (Character == '\n' || Measure(Next, Size).X > Width))
+            { Lines.Add(Line); Line.Reset(); }
+            if (Character != '\n') Line.AppendChar(Character);
         }
         if (!Line.IsEmpty()) Lines.Add(Line);
         return Lines;
@@ -106,22 +127,47 @@ void ATransmitHUD::DrawHUD()
         const FString Objective = It->GetObjectiveText();
         const FString Hint = It->GetHintText();
         const float Now = GetWorld()->GetTimeSeconds();
-        if (Objective != LastObjective || Hint != LastHint || It->GetRunStartSeconds() != LastRunStartSeconds)
+        const float Width = 440 * Scale;
+        const float HintWidth = FMath::Min(700 * Scale, Canvas->SizeX - 2*Margin);
+        const bool bTextChanged = Objective != LastObjective || Hint != LastHint || It->GetRunStartSeconds() != LastRunStartSeconds;
+        if (bTextChanged || LayoutScale != Scale || LayoutWidth != HintWidth)
+        {
+            LayoutScale = Scale; LayoutWidth = HintWidth;
+            ObjectiveLines = Wrapped(Objective, Width - 40 * Scale, 1.9f);
+            HintLines = Wrapped(Hint, HintWidth - 40 * Scale, 1.35f);
+        }
+        if (bTextChanged)
         {
             LastRunStartSeconds = It->GetRunStartSeconds();
             LastObjective = Objective;
             LastHint = Hint;
             GuidanceChangedSeconds = Now;
         }
-        const float Width = 440 * Scale;
-        const auto Lines = Wrapped(Objective, Width - 40 * Scale, 1.9f);
-        const float Height = (78 + 25 * Lines.Num()) * Scale;
+        const auto& Lines = ObjectiveLines;
+        const float Height = (78 + 32 * Lines.Num()) * Scale;
         DrawRect(FLinearColor(.025f, .038f, .048f, .82f), Margin, Margin, Width, Height);
         DrawRect(FLinearColor(.72f, .81f, .82f, .85f), Margin, Margin, 2 * Scale, Height);
-        Label(TEXT("TRANSMIT   /   MAINTENANCE"), Margin + 20*Scale, Margin + 14*Scale, .95f, NeutralColor);
+        Label(TEXT("TRANSMIT   /   临时检修工单"), Margin + 20*Scale, Margin + 14*Scale, .95f, NeutralColor);
         Label(It->GetChapterText(), Margin + 20*Scale, Margin + 38*Scale, 1.1f, FLinearColor(.7f,.8f,.82f));
         for (int32 Index = 0; Index < Lines.Num(); ++Index)
-            Label(Lines[Index], Margin + 20*Scale, Margin + (65+25*Index)*Scale, 1.9f, FLinearColor::White);
+            Label(Lines[Index], Margin + 20*Scale, Margin + (65+32*Index)*Scale, 1.9f, FLinearColor::White);
+
+        if (It->Ram && It->Ram->bArmed && It->Charger
+            && It->GetFlowStep() != ETransmitFlowStep::ReachArena && !It->IsComplete())
+        {
+            const float X = Canvas->SizeX*.5f-130*Scale;
+            const auto State = It->Charger->StateMachine->GetState();
+            const FString Phase = It->Ram->Hits>=2 ? TEXT("检修通行")
+                : State==EMotionChargerState::Telegraph ? TEXT("锁定位置")
+                : State==EMotionChargerState::Dash ? TEXT("冲刺 · E 截取")
+                : State==EMotionChargerState::Recovery ? TEXT("回位 · 准备对撞") : TEXT("门前待机");
+            DrawRect(FLinearColor(.025f,.038f,.048f,.86f),X-14*Scale,Margin-8*Scale,232*Scale,68*Scale);
+            Label(TEXT("户晨风 / 首席分等官"),X,Margin,1.25f,FLinearColor(.96f,.89f,.74f));
+            Label(Phase,X,Margin+24*Scale,1.0f,NeutralColor);
+            for (int32 Hit=0;Hit<2;++Hit)
+                DrawRect(Hit<It->Ram->Hits ? FLinearColor(.95f,.5f,.16f) : FLinearColor(.18f,.24f,.28f),
+                    X+Hit*104*Scale,Margin+48*Scale,96*Scale,3*Scale);
+        }
 
         // A short contextual lesson appears on a state change; hold Tab to recall it.
         // Moving/blocked/loaded distinctions are actual actor state, not tutorial timers.
@@ -129,8 +175,7 @@ void ATransmitHUD::DrawHUD()
             : FMath::Clamp((12.0f - (Now - GuidanceChangedSeconds)) / 1.0f, 0.0f, 1.0f);
         if (HintAlpha > 0)
         {
-            const float HintWidth = FMath::Min(700 * Scale, Canvas->SizeX - 2*Margin);
-            const auto Hints = Wrapped(Hint, HintWidth - 40*Scale, 1.35f);
+            const auto& Hints = HintLines;
             const float HintHeight = (24 + 22*Hints.Num())*Scale;
             const float X = (Canvas->SizeX - HintWidth)*.5f;
             const float Y = Canvas->SizeY - 92*Scale - HintHeight;
@@ -138,12 +183,19 @@ void ATransmitHUD::DrawHUD()
             for (int32 Index = 0; Index < Hints.Num(); ++Index)
                 Label(Hints[Index], X+20*Scale, Y+(12+22*Index)*Scale, 1.35f, FLinearColor(.9f,.94f,.95f,HintAlpha));
         }
-        Label(TEXT("TAB  Help"), Margin, Canvas->SizeY-38*Scale, 1.0f, NeutralColor);
+        const FString Narrative = It->GetNarrativeText();
+        if (!Narrative.IsEmpty())
+        {
+            const float W = Measure(Narrative, 1.25f).X;
+            DrawRect(FLinearColor(.015f,.022f,.03f,.8f), (Canvas->SizeX-W)*.5f-16*Scale, Canvas->SizeY*.73f-8*Scale, W+32*Scale, 38*Scale);
+            Label(Narrative, (Canvas->SizeX-W)*.5f, Canvas->SizeY*.73f, 1.25f, FLinearColor(.96f,.89f,.74f));
+        }
+        Label(TEXT("TAB  查看引导"), Margin, Canvas->SizeY-38*Scale, 1.0f, NeutralColor);
         const FString Controls = bHelp
-            ? TEXT("WASD  Move    MOUSE  Aim    SPACE  Jump    E  Capture    Q  Transfer    BACKSPACE  Retry area    R  Restart")
-            : TEXT("BACKSPACE  Retry area     R  Restart");
+            ? TEXT("WASD 移动   鼠标 瞄准   空格 跳跃   E 取出/截停   Q 传递   退格 本区重试   R 重新开始")
+            : TEXT("退格  本区重试     R  重新开始");
         float W=0,H=0;
-        GetTextSize(Controls,W,H,GEngine->GetMediumFont(),.95f*Scale);
+        W = Measure(Controls, .95f).X;
         Label(Controls, Canvas->SizeX-Margin-W, Canvas->SizeY-38*Scale, .95f, NeutralColor);
     }
 
@@ -159,7 +211,7 @@ void ATransmitHUD::DrawHUD()
     }
 
     const bool bLoaded = Motion->HasMotionState();
-    const FString CarryLabel = bLoaded ? TEXT("MOTION  /  LOADED") : TEXT("TOOL  /  EMPTY");
+    const FString CarryLabel = bLoaded ? TEXT("玄武能量 / 已携带") : TEXT("检修工具 / 空");
     const FLinearColor CarryColor = bLoaded ? HudTransferReadyColor : NeutralColor;
     const float StateX = Canvas->SizeX - Margin - 194*Scale;
     DrawRect(FLinearColor(.025f,.038f,.048f,.8f),StateX,Margin,194*Scale,36*Scale);
@@ -189,9 +241,9 @@ void ATransmitHUD::DrawHUD()
     DrawTargetBrackets(Preview.Target, Color);
     if (Preview.bEligible)
     {
-        const FString Action = bLoaded ? TEXT("Q   TRANSFER") : TEXT("E   CAPTURE");
+        const FString Action = bLoaded ? TEXT("Q   传递能量") : TEXT("E   取出能量");
         float W=0,H=0;
-        GetTextSize(Action,W,H,GEngine->GetMediumFont(),1.15f*Scale);
+        W = Measure(Action, 1.15f).X;
         const float X=(Canvas->SizeX-W)*.5f, Y=Canvas->SizeY*.5f+42*Scale;
         DrawRect(FLinearColor(.025f,.038f,.048f,.82f),X-12*Scale,Y-7*Scale,W+24*Scale,32*Scale);
         Label(Action,X,Y,1.15f,Color);
@@ -202,20 +254,20 @@ void ATransmitHUD::DrawHUD()
         switch (Preview.Rejection)
         {
         case EMotionTransferRejection::TimingRejected:
-            Reason = Cast<ATransmitRam>(Preview.Target) ? TEXT("Deliver the relay to arm this Ram") : TEXT("Wait for the committed dash"); break;
-        case EMotionTransferRejection::SourceEmpty: Reason = TEXT("No motion here to capture"); break;
-        case EMotionTransferRejection::CarrierOccupied: Reason = TEXT("Already carrying motion — transfer it first"); break;
-        case EMotionTransferRejection::IncompatibleType: Reason = TEXT("This Ram needs a captured charge"); break;
-        case EMotionTransferRejection::IncompatibleMagnitudeTier: Reason = TEXT("More force is required"); break;
-        case EMotionTransferRejection::IncompatibleDirection: Reason = TEXT("The motion points away from this device's axis"); break;
-        case EMotionTransferRejection::CooldownActive: Reason = TEXT("Let the Ram finish its stroke"); break;
+            Reason = Cast<ATransmitRam>(Preview.Target) ? TEXT("先将 C-01 送入接口") : TEXT("等待冲刺开始后取出"); break;
+        case EMotionTransferRejection::SourceEmpty: Reason = TEXT("此处没有可取出的能量"); break;
+        case EMotionTransferRejection::CarrierOccupied: Reason = TEXT("已携带能量，请先传递"); break;
+        case EMotionTransferRejection::IncompatibleType: Reason = TEXT("需要截取冲刺能量"); break;
+        case EMotionTransferRejection::IncompatibleMagnitudeTier: Reason = TEXT("需要更强的冲刺能量"); break;
+        case EMotionTransferRejection::IncompatibleDirection: Reason = TEXT("运动方向与设备不兼容"); break;
+        case EMotionTransferRejection::CooldownActive: Reason = TEXT("等待载体完成突进并返回"); break;
         default: break;
         }
         if (!Reason.IsEmpty())
         {
             float W = 0, H = 0;
-            GetTextSize(Reason, W, H, GEngine->GetSmallFont());
-            DrawText(Reason, Color, (Canvas->SizeX-W)*0.5f, Canvas->SizeY*0.60f, GEngine->GetSmallFont());
+            W = Measure(Reason, 1.0f).X;
+            Label(Reason, (Canvas->SizeX-W)*0.5f, Canvas->SizeY*0.60f, 1.0f, Color);
         }
     }
 }

@@ -1,4 +1,8 @@
 #include "Presentation/TransmitPresentationRig.h"
+#include "Camera/CameraActor.h"
+#include "Engine/DirectionalLight.h"
+#include "Components/DirectionalLightComponent.h"
+#include "InputCoreTypes.h"
 
 #include "Components/AudioComponent.h"
 #include "Camera/CameraComponent.h"
@@ -405,7 +409,24 @@ void ATransmitPresentationRig::DrawEncounter(const float Dt)
                 const float Fill=FMath::Clamp((DockAge/1.1f*Total-Distance)/FMath::Max(Length,1.0f),0.0f,1.0f);
                 DrawLine(Points[I-1],FMath::Lerp(Points[I-1],Points[I],Fill),3,0); Distance+=Length;
             }
-            DrawDevice(BodyAnchor(Ram),Ram->FixedAxis,160,0);
+            const FVector Device = BodyAnchor(Ram->RouteCarrier);
+            DrawDevice(Device,Ram->FixedAxis,100,0);
+            const FVector Floor(Device.X, Device.Y, 8);
+            DrawLine(Floor,Floor+Ram->FixedAxis*Ram->ImpactDistance,2,0);
+            if (Ram->IsImpactInProgress()) DrawRing(Floor,FVector::UpVector,Ram->GetImpactRadius(),4,1);
+        }
+        if (Ram->GetStrikeSerial() != LastStrikeSerial)
+        {
+            LastStrikeSerial = Ram->GetStrikeSerial();
+            const FVector Center = Ram->GetStrikePosition();
+            AddPulse(1,Center,Center,FVector::UpVector,.7f,1,2.5f);
+            if (Ram->DidStrikeBoss() && Charger)
+            {
+                const FVector BossCenter = BodyAnchor(Charger);
+                AddPulse(2,BossCenter,BossCenter,-Ram->FixedAxis,.8f,1,2.0f);
+                Cue(5,BossCenter); KickCamera(2.2f,.35f);
+            }
+            else Cue(4,Center);
         }
         if (Ram->Hits==1)
         {
@@ -464,6 +485,21 @@ void ATransmitPresentationRig::OnArmed()
 {
     if(bResetting) return;
     DockAge=0; bLastArmed=true;
+    auto* PC = UGameplayStatics::GetPlayerController(this,0);
+    if (PC && PC->GetPawn() && PC->GetPawn()->GetVelocity().SizeSquared() < 100 && Ram)
+    {
+        EndTeachingCamera();
+        const FVector Focus = Ram->GetActorLocation();
+        const FVector Eye = Focus + FVector(-700,-1100,950);
+        auto* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye,(Focus-Eye).Rotation());
+        if (Camera)
+        {
+            TeachingCamera = Camera;
+            PreviousViewTarget = PC->GetViewTarget();
+            TeachingCameraUntil = GetWorld()->GetTimeSeconds()+2.4f;
+            PC->SetViewTargetWithBlend(Camera,.4f);
+        }
+    }
     const FVector Dock=Ram && Ram->DockMarker ? Ram->DockMarker->GetActorLocation() : BodyAnchor(Ram);
     AddPulse(1,Dock,Dock,FVector::UpVector,.8f,0,1.5f); Cue(2,Dock);
     UE_LOG(LogTemp,Log,TEXT("[TRANSMIT_PRESENTATION] Dock -> Ram armed"));
@@ -511,6 +547,7 @@ void ATransmitPresentationRig::Tick(float Dt)
     {
         Phase+=Dt;
         UpdateCameraFeedback(Dt);
+        UpdateWorldPresentation(Dt);
         // Event feedback takes priority over persistent housings in the bounded pools.
         DrawPulses(Dt); DrawOwnership(); DrawEncounter(Dt);
     }
@@ -530,6 +567,7 @@ void ATransmitPresentationRig::FinishStrokes()
 
 void ATransmitPresentationRig::ClearPresentation()
 {
+    EndTeachingCamera();
     ClearCameraFeedback();
     Pulses.Reset(); ActivePulseCount=0; Phase=0; DockAge=-1;
     for(const auto& Audio:PlayingAudio) if(IsValid(Audio)) Audio->Stop();
@@ -538,7 +576,7 @@ void ATransmitPresentationRig::ClearPresentation()
     FinishStrokes();
 }
 void ATransmitPresentationRig::OnPreReset() { bResetting=true; ClearPresentation(); }
-void ATransmitPresentationRig::OnPostReset() { bResetting=false; LastHits=0; bLastArmed=false; LastChargerState=0; bCompleted=false; }
+void ATransmitPresentationRig::OnPostReset() { bResetting=false; LastHits=0; bLastArmed=false; LastChargerState=0; LastStrikeSerial=0; bCompleted=false; SkyProgress=0; }
 void ATransmitPresentationRig::EndPlay(const EEndPlayReason::Type Reason)
 {
     if(PlayerMotion.IsValid()) PlayerMotion->OnMotionTransactionNative().Remove(TransactionHandle);
@@ -552,5 +590,55 @@ void ATransmitPresentationRig::EndPlay(const EEndPlayReason::Type Reason)
     ClearPresentation();
     for(const auto& L:LegacyLights) if(L.Light.IsValid()) L.Light->SetIntensity(L.Intensity);
     for(const auto& A:LegacyArrows) if(A.Arrow.IsValid()) A.Arrow->SetHiddenInGame(A.bHidden,true);
+    if (ProgressSun.IsValid())
+    {
+        ProgressSun->SetActorRotation(InitialSunRotation);
+        ProgressSun->GetLightComponent()->SetLightColor(InitialSunColor);
+        ProgressSun->GetLightComponent()->SetIntensity(InitialSunIntensity);
+    }
     Super::EndPlay(Reason);
+}
+
+void ATransmitPresentationRig::EndTeachingCamera()
+{
+    if (!TeachingCamera.IsValid()) return;
+    if (auto* PC=UGameplayStatics::GetPlayerController(this,0))
+        if (PC->GetViewTarget()==TeachingCamera.Get())
+            PC->SetViewTarget(PreviousViewTarget.IsValid() ? PreviousViewTarget.Get() : PC->GetPawn());
+    TeachingCamera->Destroy(); TeachingCamera.Reset(); PreviousViewTarget.Reset();
+}
+
+void ATransmitPresentationRig::UpdateWorldPresentation(float Dt)
+{
+    if (TeachingCamera.IsValid())
+    {
+        auto* PC=UGameplayStatics::GetPlayerController(this,0);
+        float X=0,Y=0; if(PC) PC->GetInputMouseDelta(X,Y);
+        if (!PC || !PC->GetPawn() || GetWorld()->GetTimeSeconds()>TeachingCameraUntil
+            || PC->GetPawn()->GetVelocity().SizeSquared()>100 || FMath::Abs(X)+FMath::Abs(Y)>.5f
+            || PC->IsInputKeyDown(EKeys::E) || PC->IsInputKeyDown(EKeys::Q) || PC->IsInputKeyDown(EKeys::SpaceBar)) EndTeachingCamera();
+    }
+    if (!bSunSearched)
+    {
+        bSunSearched=true;
+        for (TActorIterator<ADirectionalLight> It(GetWorld()); It; ++It)
+        {
+            if (!It->ActorHasTag(TEXT("Transmit.ProgressSun"))) continue;
+            ProgressSun=*It; InitialSunRotation=It->GetActorRotation();
+            InitialSunColor=It->GetLightComponent()->GetLightColor();
+            InitialSunIntensity=It->GetLightComponent()->Intensity;
+            break;
+        }
+    }
+    if (!ProgressSun.IsValid()) return;
+    const APawn* Player=UGameplayStatics::GetPlayerPawn(this,0);
+    const float Target = Ram && Ram->Hits>=2 ? 3.0f : Ram && Ram->bArmed ? 2.0f
+        : Player && Player->GetActorLocation().X>2800 ? 1.0f : 0.0f;
+    SkyProgress=FMath::FInterpTo(SkyProgress,Target,Dt,.25f);
+    if (FMath::Abs(SkyProgress-AppliedSkyProgress)<.005f) return;
+    AppliedSkyProgress=SkyProgress;
+    const float Warm=FMath::Clamp(SkyProgress/3.0f,0.0f,1.0f);
+    ProgressSun->SetActorRotation(InitialSunRotation+FRotator(Warm*24.0f,Warm*28.0f,0));
+    ProgressSun->GetLightComponent()->SetLightColor(FMath::Lerp(InitialSunColor,FLinearColor(1.0f,.72f,.46f),Warm));
+    ProgressSun->GetLightComponent()->SetIntensity(InitialSunIntensity*FMath::Lerp(1.0f,.8f,Warm));
 }

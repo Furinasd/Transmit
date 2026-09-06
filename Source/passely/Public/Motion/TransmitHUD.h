@@ -14,6 +14,12 @@ public:
     virtual void DrawHUD() override;
 
 private:
+    UPROPERTY(Transient)
+    TObjectPtr<class UFont> RuntimeFont;
+    TArray<FString> ObjectiveLines;
+    TArray<FString> HintLines;
+    float LayoutScale = -1;
+    float LayoutWidth = -1;
     FString LastObjective;
     FString LastHint;
     float GuidanceChangedSeconds = 0.0f;

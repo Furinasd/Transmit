@@ -18,6 +18,8 @@ class USoundAttenuation;
 class UPointLightComponent;
 class UArrowComponent;
 class UCameraComponent;
+class ACameraActor;
+class ADirectionalLight;
 
 /** Level-local, read-only presentation. All spatial references are authored actors, never map coordinates. */
 UCLASS(BlueprintType, Blueprintable)
@@ -102,6 +104,19 @@ private:
     int32 Used[3] = {0,0,0};
     int32 PreviouslyUsed[3] = {0,0,0};
     int32 LastHits=0;
+    int32 LastStrikeSerial=0;
+    TWeakObjectPtr<ACameraActor> TeachingCamera;
+    TWeakObjectPtr<AActor> PreviousViewTarget;
+    float TeachingCameraUntil=0;
+    void EndTeachingCamera();
+    TWeakObjectPtr<ADirectionalLight> ProgressSun;
+    FRotator InitialSunRotation;
+    FLinearColor InitialSunColor;
+    float InitialSunIntensity=0;
+    float SkyProgress=0;
+    float AppliedSkyProgress=-1;
+    bool bSunSearched=false;
+    void UpdateWorldPresentation(float Dt);
     int32 LastChargerState=0;
     bool bLastArmed=false;
     bool bCompleted=false;

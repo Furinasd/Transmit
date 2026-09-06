@@ -237,3 +237,17 @@ L_Transmit, Directional Carrier and PreserveSource are now implemented; the curr
 architecture and STATE.md record their evidence. This amendment explicitly identifies
 that discrepancy without reinterpreting the frozen rules. New layout acceptance still
 requires saved-map traversal/recovery and human readability/feel review.
+
+## 2026-09-07 Boss intent correction (explicit user scope)
+
+This amendment supersedes the previous fixed-axis Charger and separate animated Ram payoff.
+- 户晨风 aims at the player's ground position, locks that vector for the telegraph, then commits to the dash. Capture still interrupts the committed dash and preserves its source direction in the player's tool.
+- Uncaptured dash energy is retired in recovery so the next dash uses a fresh aim. While the player still holds that dash resource, the Boss waits at home after recovery instead of duplicating it.
+- Every dash outcome (miss, capture, player/scenery collision) enters recovery and returns to the authored gate-front home. Recovery contains an unobstructed return and a safe counterattack/narrative window. Player contact knocks back; falling still uses the existing local retry.
+- The SAME Zone 2 carrier is delivered to the arena rail. Docking consumes the routing Motion once; the carrier becomes a fixed-speed ping-pong device and the actual Q target. No duplicate visual prop substitutes for it.
+- Captured High dash Motion powers this device. Only this device converts that energy to its authored boss/gate-facing stroke; ordinary global CameraCanonical and PreserveSource contracts are unchanged.
+- A swept physical stroke resolves one circular ground-plane impact. Boss damage/juice requires the Boss inside that circle; gate fracture additionally requires the gate inside the circle. A miss consumes the energy but never increments gate damage. Two gate impacts open the exit. The object returns to its launch position and resumes its rail motion.
+- Full reset restores routing ownership, receiver mode, transforms, gate and narrative. Arena retry preserves docking and committed damage but cancels an unfinished stroke.
+- Also authorized: Chinese guidance/narrative, overlap repair, area-driven lighting/sky, brief teaching camera cues, and Zone 2 puzzle exploration. These do not authorize changing the single-resource transfer invariant.
+
+Acceptance: native build + regression tests; L_TestChamber hit/miss/capture/contact-return checks; production PIE observes physical delivery, rail reversal, Q conversion, circular hit/miss, two-hit gate, retry/reset. Human review still owns combat feel, readability and final composition.

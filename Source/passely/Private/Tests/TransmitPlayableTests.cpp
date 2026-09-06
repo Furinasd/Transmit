@@ -3,9 +3,14 @@
 #include "Transmit/TransmitLevelActors.h"
 #include "Motion/MotionTransferComponent.h"
 #include "Motion/MotionTransferable.h"
+#include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
+#include "Components/SceneComponent.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 
-// Protect the content contract: neither ordinary motion nor a reversed dash can
-// replace the routed, armed, fixed-axis two-impact payoff. Scene timing is PIE-tested.
+// A routed rail converts captured High energy to its authored stroke.
+// Rejections retain ownership; accepted energy is consumed exactly once.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTransmitRamSignatureTest,
     "Transmit.Playable.RamSignatureAndRejectionOwnership",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -51,9 +56,9 @@ bool FTransmitRamSignatureTest::RunTest(const FString& Parameters)
     Player->RestoreInitialState(false);
     Player->ConfigureForTesting(TEXT("Player"), false, true,
         EMotionEndpointMode::Store, TOptional<FMotionState>(Reverse));
-    TestFalse(TEXT("Opposite dash axis cannot power the Ram"),
+    TestTrue(TEXT("Rail converts a player-directed dash independently of its input axis"),
         Player->TryTransferToActor(Ram, Context).bSucceeded);
-    TestTrue(TEXT("Axis rejection retains Player ownership"), Player->HasMotionState());
+    TestFalse(TEXT("Converted reverse dash is consumed once"), Player->HasMotionState());
 
     Player->RestoreInitialState(false);
     Player->ConfigureForTesting(TEXT("Player"), false, true,
@@ -71,6 +76,55 @@ bool FTransmitRamSignatureTest::RunTest(const FString& Parameters)
         IMotionTransferable::CallCanReceiveMotion(Ram, Dash, Context).bAllowed);
     Player->RemoveFromRoot();
     Ram->RemoveFromRoot();
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTransmitBossReaimTest,
+    "Transmit.Playable.BossReaimReturnAndSingleResource",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FTransmitBossReaimTest::RunTest(const FString&)
+{
+    UWorld* World = UWorld::CreateWorld(EWorldType::Game, false);
+    auto* Player = World->SpawnActor<APawn>();
+    // A transform-bearing pawn is needed for the real PlayerController lookup.
+    auto* Root = NewObject<USceneComponent>(Player);
+    Player->SetRootComponent(Root); Root->RegisterComponent();
+    auto* Controller = World->SpawnActor<APlayerController>();
+    World->AddController(Controller);
+    Controller->Possess(Player);
+    TestEqual(TEXT("Fixture player is discoverable through the production lookup"), UGameplayStatics::GetPlayerPawn(World, 0), Player);
+    auto* Held = NewObject<UMotionTransferComponent>(Player);
+    Held->RegisterComponent();
+    Held->ConfigureForTesting(TEXT("Player"),false,true,EMotionEndpointMode::Store,{});
+    auto* Boss = World->SpawnActor<ATransmitArenaCharger>(FVector(0,0,100),FRotator::ZeroRotator);
+    Boss->DispatchBeginPlay();
+    auto* FSM = Boss->StateMachine.Get();
+    FSM->IdleDurationSeconds=.05f; FSM->TelegraphDurationSeconds=.05f;
+    FSM->DashDurationSeconds=.3f; FSM->RecoveryDurationSeconds=2.0f;
+    FSM->DashCommitWindowDelaySeconds=0;
+    Player->SetActorLocation(FVector(-2000,0,100));
+    Boss->SetEncounterActive(true); Boss->Tick(.06f); Boss->Tick(.06f);
+    FMotionState First;
+    TestTrue(TEXT("First dash grants energy"),Boss->Motion->TryGetMotionState(First));
+    TestTrue(TEXT("First commitment aims at the actual player"),First.Direction.Equals(-FVector::ForwardVector,.01f));
+    FSM->ForceRecovery(); Boss->Tick(.05f);
+    TestFalse(TEXT("Missed energy retires in recovery"),Boss->Motion->HasMotionState());
+    for(int32 I=0;I<50 && FSM->GetState()!=EMotionChargerState::Idle;++I) Boss->Tick(.05f);
+    TestTrue(TEXT("Miss returns to its authored home"),Boss->GetActorLocation().Equals(FVector(0,0,100),.01f));
+    Player->SetActorLocation(FVector(0,2000,100));
+    Boss->Tick(.06f); Boss->Tick(.06f);
+    FMotionState Second;
+    TestTrue(TEXT("Next dash grants fresh energy"),Boss->Motion->TryGetMotionState(Second));
+    TestTrue(TEXT("Next dash does not reuse the previous direction"),Second.Direction.Equals(FVector::RightVector,.01f));
+    FMotionTransferContext Context;
+    TestTrue(TEXT("Real actor capture succeeds during committed dash"),Held->TryCaptureFromActor(Boss,Context).bSucceeded);
+    for(int32 I=0;I<250;++I) Boss->Tick(.05f);
+    TestTrue(TEXT("Capture also returns home"),Boss->GetActorLocation().Equals(FVector(0,0,100),.01f));
+    TestTrue(TEXT("The player's captured resource remains owned"),Held->HasMotionState());
+    TestFalse(TEXT("Boss never regenerates a second copy while held"),Boss->Motion->HasMotionState());
+    TestEqual(TEXT("Boss waits at home until that resource is used"),FSM->GetState(),EMotionChargerState::Idle);
+    World->DestroyWorld(false);
     return true;
 }
 #endif

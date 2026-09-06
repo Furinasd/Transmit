@@ -256,7 +256,7 @@ The formal content line is `Jason/L_Transmit_v01` (2026-09-06). Older implementa
 - `UMotionTransferComponent` owns Motion state, atomic transfer, rejection preservation and Reset snapshots. `IMotionTransferable::Call*` keeps native and Blueprint Actor paths consistent.
 - `UMotionInteractorComponent` owns camera-based target acquisition and the preview shared by commit. Ordinary motion resolves against six world axes; Charger High Motion keeps its committed Dash axis.
 - `ATransmitDirectionalCarrierActor` moves its collision root in world space, stops on swept blocking collision, permits re-capture and restores through the existing room Reset.
-- `ATransmitBridgeSlab`, `ATransmitRam` and `ATransmitArenaCharger` are concrete L_Transmit content roles. The delivered relay locks its existing Motion in place and arms the Ram. Each consumed High Motion drives one Ram stroke; the first impact fractures the gate, the second opens it.
+- `ATransmitBridgeSlab`, `ATransmitRam` and `ATransmitArenaCharger` are concrete L_Transmit content roles. The dock atomically consumes the routing Motion. The same relay becomes a fixed-speed rail device; a native Ram controller temporarily supplies its receive policy and physical stroke. Captured High energy is consumed once. A swept stroke resolves a circular impact: Boss contact produces feedback, and nearby gate contact commits fracture/open damage. Misses never score. Reset restores the original carrier endpoint and permissions.
 - `ATransmitLevelDirector` observes those real actors and chooses objective/transition state. It activates the encounter only after arming and reaching the arena, ends the threat after impact two, and completes after the player crosses the exit marker. It does not own or transfer Motion.
 
 ### Level retry and presentation boundary
@@ -268,7 +268,7 @@ The formal content line is `Jason/L_Transmit_v01` (2026-09-06). Older implementa
 - Weaponize preserves the delivered relay, armed Ram and committed gate impacts, and restores the player to arena entry. The Charger restarts only while fewer than two impacts are committed.
 - If the route resource is stored outside the Route retry group, local retry falls back to whole-room Reset, avoiding a second copy of that resource. Completion retry also starts a fresh full run.
 
-`OnFlowChanged` and `OnLocalRetry` fire after their observable state changes. Ram `OnArmed` fires after carrier permission locking; `OnImpact` fires after hit count and gate mutation. The HUD reads the director and actual interaction preview; it explains objectives and rejection without granting interaction eligibility. Dedicated presentation may observe these events and references but must not supply its own gameplay state.
+`OnFlowChanged` and `OnLocalRetry` fire after their observable state changes. Ram `OnArmed` fires after docking consumption and carrier mode conversion; `OnImpact` fires after hit count and gate mutation. The HUD reads the director and actual interaction preview; it explains objectives and rejection without granting interaction eligibility. Dedicated presentation may observe these events and references but must not supply its own gameplay state.
 
 `Scripts/Editor/author_ltransmit_flow.py` patches the scoped formal map idempotently. The older full graybox builder is a historical bootstrap, not a safe way to update an authored candidate. Gameplay/resource checks, Editor authoring checks, and human readability acceptance are distinct evidence layers; current results belong in `STATE.md` rather than this architecture record.
 
@@ -295,3 +295,10 @@ that presentation timer, including R while the objective is unchanged. No input
 mapping, reflected authoring property or gameplay permission is introduced.
 Scene plaques use the existing material palette and simple host-hardware geometry;
 world naming does not change Motion state, magnitude or compatibility.
+
+
+### Arena correction and presentation (2026-09-07)
+
+`ATransmitArenaCharger` keeps the existing Charger FSM. Idle aims at the player, telegraph locks that direction, recovery retires uncaptured Motion and returns to the authored home transform. Idle waits while the player still holds this dash source, avoiding duplicate ownership. Contact knocks the player back and enters recovery; a fall still uses local retry.
+
+The Ram's `RailHalfSpan`, `RailSpeed`, `ImpactRadius`, `FixedAxis`, and `ImpactDistance` remain local authoring parameters. Core Motion interfaces and atomic transfer behavior are unchanged. The level's existing events drive narration and the existing bounded PresentationRig pools. HUD wrapping caches layouts and uses a transient runtime UFont with the engine composite typeface. A map-tagged movable sun supports progression; an optional dock glance cancels on input. No new gameplay subsystem or general framework was added. See `Docs/dev/20260907-boss-rail-polish.md` for cost boundaries and paper-only Zone 2 proposals.

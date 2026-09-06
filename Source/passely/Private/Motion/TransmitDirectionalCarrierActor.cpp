@@ -1,4 +1,5 @@
 #include "Motion/TransmitDirectionalCarrierActor.h"
+#include "Transmit/TransmitLevelActors.h"
 
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -56,7 +57,7 @@ void ATransmitDirectionalCarrierActor::BeginPlay()
 void ATransmitDirectionalCarrierActor::Tick(const float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-    TickMovement(DeltaSeconds);
+    if (!RailController.IsValid()) TickMovement(DeltaSeconds);
 }
 
 UMotionTransferComponent* ATransmitDirectionalCarrierActor::GetMotionTransferComponent_Implementation() const
@@ -162,4 +163,17 @@ void ATransmitDirectionalCarrierActor::TickMovement(const float DeltaSeconds)
         bMovementActive = false;
         bBlockedByCollision = true;
     }
+}
+
+void ATransmitDirectionalCarrierActor::SetRailController(ATransmitRam* Controller)
+{
+    RailController = Controller;
+    RefreshMovementFromOwnership();
+}
+
+FMotionCompatibilityResult ATransmitDirectionalCarrierActor::CanReceiveMotion_Implementation(
+    const FMotionState& State, const FMotionTransferContext& Context) const
+{
+    return RailController.IsValid() ? RailController->CanReceiveMotion_Implementation(State, Context)
+        : IMotionTransferable::CanReceiveMotion_Implementation(State, Context);
 }

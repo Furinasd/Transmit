@@ -49,20 +49,14 @@ class TransmitRun:
    for pos in [(7900,-3400),(7900,-2500),(7900,-600),(7000,-600)]:self.walk(pos)
   else:
    for pos in [(5350,-650),(5850,-650)]:self.walk(pos)
-  for pos in [(7000,-500),(7000,700),(7620,700),(7620,1420)]:self.walk(pos)
-  self.wait('capture dash one',lambda:self.capture_dash(),18)
-  self.walk((7780,2800))
-  self.walk((7150,2750))
-  self.add('power ram one',lambda:self.verb('Weaponize_Ram','transfer'))
+  for pos in [(7000,-500),(7000,700),(6700,1900),(6800,2530)]:self.walk(pos)
+  self.wait('capture dash one',lambda:self.capture_dash(),25)
+  self.wait('power ram one',lambda:self.fire_rail(),25)
   self.wait('gate hit one',lambda:self.a['Weaponize_Ram'].hits==1,4)
-  self.walk((7780,2800))
-  self.walk((7620,2080))
-  self.wait('capture dash two',lambda:self.capture_dash(),18)
-  self.walk((7780,2800))
-  self.walk((7150,2750))
-  self.add('power ram two',lambda:self.verb('Weaponize_Ram','transfer'))
+  self.wait('capture dash two',lambda:self.capture_dash(),25)
+  self.wait('power ram two',lambda:self.fire_rail(),25)
   self.wait('gate hit two',lambda:self.a['Weaponize_Ram'].hits==2,4)
-  for pos in [(7780,2800),(7930,2530),(8460,2530),(8880,2530)]:self.walk(pos)
+  for pos in [(7400,2850),(7800,2850),(8000,2750),(8460,2530),(8880,2530)]:self.walk(pos)
   self.wait('director complete',lambda:self.a['Flow_Director'].is_complete() and not self.a['Weaponize_Gate'].get_actor_enable_collision(),4)
   self.handle=unreal.register_slate_post_tick_callback(self.tick)
   self.emit('begin',note='continuous scripted movement, real targeting, no injected Motion; human acceptance separate')
@@ -93,10 +87,26 @@ class TransmitRun:
    self.emit('target failure',expected=label,selected=preview.target.get_actor_label() if preview.target else None,preview=str(preview),player=str(self.p.get_actor_location()));return False
   result=self.i.request_capture() if verb=='capture' else self.i.request_transfer()
   self.emit(verb,target=label,ok=result.succeeded,result=str(result),preview=str(preview));return result.succeeded
+ def aim_live(self,actor):
+  eye,_=self.p.get_actor_eyes_view_point()
+  self.pc.set_control_rotation(unreal.MathLibrary.find_look_at_rotation(eye,actor.get_actor_location()))
+  self.i.refresh_target()
+  return self.i.get_current_preview()
  def capture_dash(self):
-  ch=self.a['Weaponize_Charger']
-  if not ch.state_machine.is_capture_window_open():return False
-  return self.verb('Weaponize_Charger','capture')
+  ch=self.a['Weaponize_Charger'];preview=self.aim_live(ch)
+  if not ch.state_machine.is_capture_window_open() or preview.target!=ch or not preview.eligible:return False
+  result=self.i.request_capture()
+  if result.succeeded:self.emit('capture',target='Weaponize_Charger',ok=True)
+  return result.succeeded
+ def fire_rail(self):
+  carrier=self.a['Route_Carrier'];boss=self.a['Weaponize_Charger'];preview=self.aim_live(carrier)
+  p=boss.get_actor_location();c=carrier.get_actor_location()
+  if abs(p.x-7980)>1 or abs(p.y-2530)>1 or abs(c.y-p.y)>70:return False
+  if boss.state_machine.get_state() not in [unreal.MotionChargerState.RECOVERY,unreal.MotionChargerState.IDLE]:return False
+  if preview.target!=carrier or not preview.eligible:return False
+  result=self.i.request_transfer()
+  if result.succeeded:self.emit('transfer',target='Route_Carrier',ok=True)
+  return result.succeeded
  def tick(self,dt):
   if self.done:return
   try:

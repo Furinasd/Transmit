@@ -2,9 +2,24 @@
 
 > Operational snapshot, not design authority. Gameplay rules live in `DESIGN_CONTRACT.md`; architecture lives in `ARCHITECTURE.md`. Historical evidence remains in `Docs/dev/` and Git.
 
-Last inspected: 2026-09-07, vertical maintenance route and compact guidance; human timing/experience acceptance remains open.
+Last inspected: 2026-09-07, Boss rail correction and Chinese guidance. Human feel/readability and packaged performance acceptance remain open.
 
-## Current vertical layout checkpoint
+## Current Boss correction checkpoint
+
+- Latest approved behavior: player-directed Boss commitment, guaranteed gate-front recovery, actual Zone 2 carrier as a constant-speed rail counterweapon. A physical circular hit damages Boss/gate; a miss consumes energy without progress. Holding captured energy pauses Boss at home and does not duplicate the resource.
+- Chinese objectives, contextual teaching, Notion 04 narrative, Boss phase/readout, dock camera glance and map-local progression sun are integrated. Existing four-state FSM and bounded presentation pools are reused; no new gameplay framework or VFX simulation system.
+- Only binary changed in this pass: `Content/Transmit/Maps/L_Transmit.umap` (577 actors). Original connection-floor overlaps now meet at edges; obsolete arena blockers/instructions are hidden through Editor. No project rendering settings changed.
+- Current candidate: `Saved/LTransmitCandidate/20260907-boss-rail-Mac/Transmit.app`. Mac Development Build/Cook/IoStore Stage passed in 50.98 s; complete bundle signature verification passed. Old candidates were not overwritten. `PLAYTEST.md` documents controls and the remaining human checks.
+- Independent candidate process initialized `L_Transmit` and loaded packaged Roboto/DroidSansFallback fonts (`Boss/standalone-bootstrap.json`). Mac was locked, so native standalone visual/input inspection and foreground profiling remain open; PIE screenshots do not certify those gates.
+- Final Mac Editor build passed (`/tmp/transmit-boss-final-build.log`, 8.44 s). Final automation: **26 passed, 0 failed**, `Saved/LTransmitEvidence/Boss/automation-final.json`, including Boss re-aim/return/single-resource regression.
+- Final production gameplay run: `Saved/LTransmitEvidence/Boss/full-run.json`, 187.830 game seconds, actual movement/E/Q from spawn to exit without teleport/resource injection. `full-reset.json` confirms original carrier transform/permissions, empty resources, Boss home and gate collision restored. The final HUD contrast-only change was observed separately in `Boss/final-boss-hud00000.png`.
+- `Boss/retry.json`: actual first hit followed by local retry during the next stroke preserved dock/damage and cancelled pending impact; full reset during another stroke restored carrier endpoint/resources/gate. Explicit dock/position setup is separate from the clean full-run evidence.
+- TestChamber fixture: `Boss/chamber.json` confirms aimed dash, miss return, same-carrier ping-pong, actual E/Q, off-axis miss, two real hits and contact return. Fixtures were unsaved and did not change the chamber asset.
+- Chinese and floor visuals: `Boss/01-chinese00001.png`, `02-overlap-repair00001.png`; arena impact: `07-fracture00001.png`. These are observed runtime images, not aesthetic acceptance.
+- Ram Details opened/expanded, RailSpeed changed through Editor API to 181 and observed in Slate Details, restored to 180, saved/reloaded. Evidence `Boss/details.png`, `details-181.json`. Other pre-existing nested struct/Blueprint human authoring gates below remain separate.
+- Zone 2 combination proposals remain paper-only in `Docs/dev/20260907-boss-rail-polish.md`. Performance budget must be measured in a foreground packaged build; throttled PIE frame samples are not a GPU benchmark.
+
+## Previous vertical layout checkpoint (historical candidate)
 
 - User-authorized major layout iteration on `Jason/L_Transmit_v01`, currently an
   uncommitted working-tree change. Source of world context: STANDARD Notion 04.

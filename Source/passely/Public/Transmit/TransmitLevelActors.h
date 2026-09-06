@@ -46,6 +46,12 @@ public:
     ATransmitRam();
 
     bool IsImpactInProgress() const { return bInFlightImpact; }
+    FVector GetStrikePosition() const { return StrikePosition; }
+    int32 GetStrikeSerial() const { return StrikeSerial; }
+    bool DidStrikeBoss() const { return bStrikeHitBoss; }
+    float GetImpactRadius() const { return ImpactRadius; }
+    void CancelStroke();
+
 
     UPROPERTY(BlueprintAssignable, Category = "Transmit|Events")
     FTransmitLevelEvent OnArmed;
@@ -78,7 +84,16 @@ public:
     float MinimumMagnitude = 1000.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transmit|Ram", meta = (ClampMin = "1.0"))
-    float ImpactDistance = 500.0f;
+    float ImpactDistance = 1100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transmit|Rail", meta = (ClampMin = "50.0"))
+    float RailHalfSpan = 550.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transmit|Rail", meta = (ClampMin = "1.0"))
+    float RailSpeed = 180.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transmit|Rail", meta = (ClampMin = "1.0"))
+    float ImpactRadius = 250.0f;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Transmit|Ram")
     bool bArmed = false;
@@ -90,7 +105,18 @@ protected:
     virtual void BeginPlay() override;
 
 private:
-    float ImpactApproachSeconds = 0.45f;
+    FVector RailCenter = FVector::ZeroVector;
+    FVector StrokeStart = FVector::ZeroVector;
+    FVector StrikePosition = FVector::ZeroVector;
+    float RailPhase = 0;
+    int32 StrikeSerial = 0;
+    bool bStrikeHitBoss = false;
+    bool bDockTransit = false;
+    FVector DockTransitStart = FVector::ZeroVector;
+    float DockTransitElapsed = 0;
+    EMotionEndpointMode InitialCarrierEndpoint = EMotionEndpointMode::Store;
+    void ResolveStrike();
+    float ImpactApproachSeconds = 0.65f;
     float ImpactReturnSeconds = 0.6f;
 
     bool bInFlightImpact = false;
@@ -102,7 +128,6 @@ private:
     bool bInitialCarrierCanReceive = false;
 
     FVector InitialBodyRelativeLocation = FVector::ZeroVector;
-    FVector ExtendedBodyRelativeLocation = FVector::ZeroVector;
     FVector InitialGateLocation = FVector::ZeroVector;
     FRotator InitialGateRotation = FRotator::ZeroRotator;
     bool bInitialGateCollisionEnabled = true;
@@ -121,7 +146,6 @@ private:
     void ApplyGateImpact();
     void RestoreCarrierPermissions();
     void RestoreGate();
-    FVector GetLocalFixedAxis() const;
     FVector GetDockCenter() const;
 };
 
@@ -139,15 +163,22 @@ public:
     void SetEncounterActive(bool bActive);
 
     void RestartEncounter();
+    void ReceiveRailImpact();
+    FVector GetHomeLocation() const { return HomeTransform.GetLocation(); }
+    int32 GetCompletedReturns() const { return CompletedReturns; }
+
 
 protected:
     virtual void BeginPlay() override;
 
 private:
     FTransform HomeTransform = FTransform::Identity;
+    FVector RecoveryStart = FVector::ZeroVector;
+    bool bReturningHome = false;
+    float ReturnElapsed = 0;
+    int32 CompletedReturns = 0;
     EMotionChargerState LastFrameState = EMotionChargerState::Idle;
     bool bEncounterActive = false;
-    bool bResetScheduled = false;
 
     UFUNCTION()
     void HandleArenaComponentHit(
@@ -161,7 +192,6 @@ private:
     void HandleArenaPostRoomReset();
 
     void BindArenaRoomResetController();
-    void TryArenaResetFromHit();
     void ReturnToHome();
     AMotionRoomResetController* FindArenaResetController() const;
 };
@@ -202,6 +232,7 @@ public:
     bool RequestLocalRetry();
 
     FString GetObjectiveText() const;
+    FString GetNarrativeText() const;
     FString GetHintText() const;
     FString GetChapterText() const;
     float GetRunStartSeconds() const { return RunStartSeconds; }
@@ -236,6 +267,9 @@ private:
 
     ETransmitFlowStep FlowStep = ETransmitFlowStep::TakeMotion;
     int32 Checkpoint = 0;
+    int32 NarrativeFlags = 0;
+    FString Narrative;
+    float NarrativeUntil = 0;
     float StepStartedSeconds = 0.0f;
     float LastRetrySeconds = -10.0f;
     FName RouteResourceId = NAME_None;

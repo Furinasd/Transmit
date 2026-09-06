@@ -58,6 +58,10 @@ void ATransmitRam::BeginPlay()
     Super::BeginPlay();
 
     CacheInitialTransforms();
+    RailCenter = GetActorLocation();
+    RailPhase = RailHalfSpan;
+    Body->SetVisibility(false);
+    SetActorEnableCollision(false);
 
     Motion->OnMotionConsumed.AddDynamic(this, &ATransmitRam::HandleRamMotionConsumed);
 
@@ -70,51 +74,88 @@ void ATransmitRam::Tick(const float DeltaSeconds)
     Super::Tick(DeltaSeconds);
 
     LatchArmIfReady();
-    // Arming is a spatial event; expose it at the device before any UI request.
-    MotionIndicator->SetVisibility(bArmed);
-    MotionIndicator->SetLightColor(FLinearColor(0.05f, 0.9f, 0.65f));
-    DirectionIndicator->SetVisibility(bArmed && Hits < 2);
-    DirectionIndicator->SetWorldRotation(FixedAxis.Rotation());
+    MotionIndicator->SetVisibility(false);
+    DirectionIndicator->SetVisibility(false);
+    if (!bArmed || !RouteCarrier) return;
 
+    // The delivered actor remains the physical device and interaction target.
+    if (bDockTransit)
+    {
+        DockTransitElapsed += DeltaSeconds;
+        const float T = FMath::Clamp(DockTransitElapsed / 4.0f, 0.0f, 1.0f);
+        const FVector P = FMath::Lerp(DockTransitStart, RailCenter, T)
+            + FVector(0, 0, FMath::Sin(T * PI) * 1200.0f);
+        RouteCarrier->SetActorLocation(P, false);
+        if (T >= 1) bDockTransit = false;
+        return;
+    }
     if (!bInFlightImpact)
     {
+        if (Hits >= 2) return;
+        const float Span = FMath::Max(50.0f, RailHalfSpan);
+        RailPhase = FMath::Fmod(RailPhase + DeltaSeconds * RailSpeed, 4 * Span);
+        const float Offset = RailPhase <= 2 * Span ? RailPhase - Span : 3 * Span - RailPhase;
+        const FVector Side = FVector::CrossProduct(FVector::UpVector, FixedAxis).GetSafeNormal();
+        RouteCarrier->SetActorLocation(RailCenter + Side * Offset, false);
         return;
     }
 
     ImpactElapsed += DeltaSeconds;
-
     if (!bReturningBody)
     {
-        const float T = FMath::Clamp(
-            ImpactElapsed / FMath::Max(0.001f, ImpactApproachSeconds),
-            0.0f,
-            1.0f);
-        Body->SetRelativeLocation(FMath::Lerp(InitialBodyRelativeLocation, ExtendedBodyRelativeLocation, T));
-
-        if (ImpactElapsed >= ImpactApproachSeconds)
+        const float T = FMath::Clamp(ImpactElapsed / ImpactApproachSeconds, 0.0f, 1.0f);
+        const FVector Destination = StrokeStart + FixedAxis.GetSafeNormal() * ImpactDistance * T;
+        FHitResult Hit;
+        RouteCarrier->SetActorLocation(Destination, true, &Hit);
+        if (Hit.bBlockingHit || T >= 1)
         {
-            Body->SetRelativeLocation(ExtendedBodyRelativeLocation);
-            ApplyGateImpact();
+            StrikePosition = RouteCarrier->GetActorLocation();
+            ResolveStrike();
             bReturningBody = true;
-            ImpactElapsed = 0.0f;
+            ImpactElapsed = 0;
         }
     }
     else
     {
-        const float T = FMath::Clamp(
-            ImpactElapsed / FMath::Max(0.001f, ImpactReturnSeconds),
-            0.0f,
-            1.0f);
-        Body->SetRelativeLocation(FMath::Lerp(ExtendedBodyRelativeLocation, InitialBodyRelativeLocation, T));
+        const float T = FMath::Clamp(ImpactElapsed / ImpactReturnSeconds, 0.0f, 1.0f);
+        RouteCarrier->SetActorLocation(FMath::Lerp(StrikePosition, StrokeStart, T), false);
+        if (T >= 1) { bInFlightImpact = false; bReturningBody = false; }
+    }
+}
 
-        if (ImpactElapsed >= ImpactReturnSeconds)
+void ATransmitRam::ResolveStrike()
+{
+    ++StrikeSerial;
+    bStrikeHitBoss = false;
+    for (TActorIterator<ATransmitArenaCharger> It(GetWorld()); It; ++It)
+    {
+        const FVector Delta = It->GetActorLocation() - StrikePosition;
+        if (Delta.SizeSquared2D() <= FMath::Square(ImpactRadius)
+            && FMath::Abs(Delta.Z) < 180.0f)
         {
-            Body->SetRelativeLocation(InitialBodyRelativeLocation);
-            bInFlightImpact = false;
-            bReturningBody = false;
-            ImpactElapsed = 0.0f;
+            bStrikeHitBoss = true;
+            It->ReceiveRailImpact();
         }
     }
+    // Damage is a circular ground-plane impact. Animation time alone never scores.
+    if (Gate && bStrikeHitBoss)
+    {
+        FVector Center, Extent;
+        Gate->GetActorBounds(true, Center, Extent);
+        const FVector Closest(FMath::Clamp(StrikePosition.X, Center.X-Extent.X, Center.X+Extent.X),
+            FMath::Clamp(StrikePosition.Y, Center.Y-Extent.Y, Center.Y+Extent.Y), StrikePosition.Z);
+        if (FVector::DistSquared2D(Closest, StrikePosition) <= FMath::Square(ImpactRadius)) ApplyGateImpact();
+    }
+    UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_ARENA] Strike=%d boss=%d hits=%d center=%s"),
+        StrikeSerial, bStrikeHitBoss, Hits, *StrikePosition.ToString());
+}
+
+void ATransmitRam::CancelStroke()
+{
+    if (bInFlightImpact && RouteCarrier) RouteCarrier->SetActorLocation(StrokeStart, false);
+    bInFlightImpact = false;
+    bReturningBody = false;
+    ImpactElapsed = 0;
 }
 
 FMotionCompatibilityResult ATransmitRam::CanReceiveMotion_Implementation(
@@ -153,21 +194,17 @@ FMotionCompatibilityResult ATransmitRam::CanReceiveMotion_Implementation(
         return FMotionCompatibilityResult::Reject(EMotionTransferRejection::IncompatibleMagnitudeTier);
     }
 
-    const FVector Axis = FixedAxis.GetSafeNormal();
-    const FVector Direction = State.Direction.GetSafeNormal();
-    if (Axis.IsNearlyZero()
-        || Direction.IsNearlyZero()
-        || FVector::DotProduct(Axis, Direction) < 0.98f)
-    {
-        return FMotionCompatibilityResult::Reject(EMotionTransferRejection::IncompatibleDirection);
-    }
+    if (bDockTransit || FixedAxis.IsNearlyZero())
+        return FMotionCompatibilityResult::Reject(EMotionTransferRejection::TimingRejected);
 
+    // This rail device converts captured energy into its authored forward stroke.
+    // It does not alter PreserveSource for any other receiver.
     return FMotionCompatibilityResult::Allow();
 }
 
 void ATransmitRam::HandleRamMotionConsumed(const FMotionTransferResult& Result)
 {
-    if (!Result.bSucceeded || !Result.bConsumed)
+    if (!bArmed || !Result.bSucceeded || !Result.bConsumed)
     {
         return;
     }
@@ -184,6 +221,9 @@ void ATransmitRam::HandleRamMotionConsumed(const FMotionTransferResult& Result)
 void ATransmitRam::HandleRamPostRoomReset()
 {
     bArmed = false;
+    bDockTransit = false;
+    RailPhase = RailHalfSpan;
+    StrikeSerial = 0;
     Hits = 0;
     bInFlightImpact = false;
     bReturningBody = false;
@@ -229,6 +269,7 @@ void ATransmitRam::CacheInitialTransforms()
         if (UMotionTransferComponent* CarrierMotion =
                 RouteCarrier->GetMotionTransferComponent_Implementation())
         {
+            InitialCarrierEndpoint = CarrierMotion->EndpointMode;
             bInitialCarrierCanProvide = CarrierMotion->bCanProvideMotion;
             bInitialCarrierCanReceive = CarrierMotion->bCanReceiveMotion;
             bCarrierInitialized = true;
@@ -275,9 +316,18 @@ void ATransmitRam::LatchArmIfReady()
         bCarrierInitialized = true;
     }
 
+    // Atomically consume the ordinary routing state before changing the endpoint.
+    const FMotionTransferResult DockResult = CarrierMotion->TryTransferToComponent(Motion);
+    if (!DockResult.bSucceeded) return;
     bArmed = true;
     CarrierMotion->bCanProvideMotion = false;
-    CarrierMotion->bCanReceiveMotion = false;
+    CarrierMotion->bCanReceiveMotion = true;
+    CarrierMotion->EndpointMode = EMotionEndpointMode::ConsumeOnReceive;
+    CarrierMotion->OnMotionConsumed.AddUniqueDynamic(this, &ATransmitRam::HandleRamMotionConsumed);
+    RouteCarrier->SetRailController(this);
+    DockTransitStart = RouteCarrier->GetActorLocation();
+    DockTransitElapsed = 0;
+    bDockTransit = true;
     OnArmed.Broadcast();
 
     UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_PLAYABLE] Ram armed from carrier %s"), *GetNameSafe(RouteCarrier));
@@ -289,12 +339,7 @@ void ATransmitRam::BeginImpactAnimation()
     bReturningBody = false;
     ImpactElapsed = 0.0f;
 
-    if (Body)
-    {
-        Body->SetRelativeLocation(InitialBodyRelativeLocation);
-    }
-
-    ExtendedBodyRelativeLocation = InitialBodyRelativeLocation + GetLocalFixedAxis() * ImpactDistance;
+    StrokeStart = RouteCarrier ? RouteCarrier->GetActorLocation() : GetActorLocation();
 }
 
 void ATransmitRam::ApplyGateImpact()
@@ -354,6 +399,9 @@ void ATransmitRam::RestoreCarrierPermissions()
     if (UMotionTransferComponent* CarrierMotion =
             RouteCarrier->GetMotionTransferComponent_Implementation())
     {
+        CarrierMotion->EndpointMode = InitialCarrierEndpoint;
+        CarrierMotion->OnMotionConsumed.RemoveDynamic(this, &ATransmitRam::HandleRamMotionConsumed);
+        RouteCarrier->SetRailController(nullptr);
         CarrierMotion->bCanProvideMotion = bInitialCarrierCanProvide;
         CarrierMotion->bCanReceiveMotion = bInitialCarrierCanReceive;
     }
@@ -369,17 +417,6 @@ void ATransmitRam::RestoreGate()
     Gate->SetActorLocation(InitialGateLocation, false, nullptr, ETeleportType::TeleportPhysics);
     Gate->SetActorRotation(InitialGateRotation);
     Gate->SetActorEnableCollision(bInitialGateCollisionEnabled);
-}
-
-FVector ATransmitRam::GetLocalFixedAxis() const
-{
-    const FVector WorldAxis = FixedAxis.GetSafeNormal();
-    if (WorldAxis.IsNearlyZero())
-    {
-        return FVector::ZeroVector;
-    }
-
-    return GetActorTransform().InverseTransformVectorNoScale(WorldAxis).GetSafeNormal();
 }
 
 FVector ATransmitRam::GetDockCenter() const
@@ -409,22 +446,53 @@ void ATransmitArenaCharger::BeginPlay()
 
 void ATransmitArenaCharger::Tick(const float DeltaSeconds)
 {
-    Super::Tick(DeltaSeconds);
-
-    if (!StateMachine)
+    if (!StateMachine) return;
+    const auto Before = StateMachine->GetState();
+    // Track during idle only; telegraph and dash share one committed aim vector.
+    if (bEncounterActive && Before == EMotionChargerState::Idle)
     {
-        LastFrameState = EMotionChargerState::Idle;
-        return;
+        if (const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0))
+        {
+            const auto* Held = Player->FindComponentByClass<UMotionTransferComponent>();
+            FMotionState HeldState;
+            // One dash resource: do not regenerate it while the player still owns it.
+            if (Held && Held->TryGetMotionState(HeldState) && HeldState.SourceId == DashSourceId) return;
+            const FVector ToPlayer = Player->GetActorLocation() - GetActorLocation();
+            if (!ToPlayer.IsNearlyZero()) DashDirection = ToPlayer.GetSafeNormal2D();
+        }
     }
-
-    const EMotionChargerState CurrentState = StateMachine->GetState();
-    if (LastFrameState == EMotionChargerState::Recovery
-        && CurrentState == EMotionChargerState::Idle)
+    Super::Tick(DeltaSeconds);
+    const auto Current = StateMachine->GetState();
+    if (bEncounterActive && Current == EMotionChargerState::Recovery)
+    {
+        if (!bReturningHome)
+        {
+            bReturningHome = true;
+            // A missed dash was never captured; retire it so the next commitment
+            // grants the newly aimed vector instead of reusing stale ownership.
+            if (Motion->HasMotionState()) Motion->RestoreInitialState(true);
+            RecoveryStart = GetActorLocation();
+            ReturnElapsed = 0;
+        }
+        ReturnElapsed += DeltaSeconds;
+        const float T = FMath::Clamp((ReturnElapsed - 0.35f) / 0.8f, 0.0f, 1.0f);
+        // Unobstructed recovery guarantees the gate-front anchor even after a miss,
+        // capture, player collision, or scenery collision. The remaining recovery is a punish window.
+        SetActorLocation(FMath::Lerp(RecoveryStart, HomeTransform.GetLocation(), FMath::SmoothStep(0.0f, 1.0f, T)), false);
+    }
+    if (bEncounterActive && Current == EMotionChargerState::Idle && LastFrameState == EMotionChargerState::Recovery)
     {
         ReturnToHome();
+        ++CompletedReturns;
+        UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_ARENA] Return=%d home=%s"), CompletedReturns, *GetActorLocation().ToString());
     }
+    LastFrameState = Current;
+}
 
-    LastFrameState = CurrentState;
+void ATransmitArenaCharger::ReceiveRailImpact()
+{
+    if (StateMachine) StateMachine->ForceRecovery();
+    Body->SetRelativeScale3D(FVector(1.5f, 1.5f, 0.8f));
 }
 
 void ATransmitArenaCharger::SetEncounterActive(const bool bActive)
@@ -438,6 +506,7 @@ void ATransmitArenaCharger::SetEncounterActive(const bool bActive)
     else
     {
         StopChargerCycle();
+        ReturnToHome();
     }
 
     LastFrameState = StateMachine ? StateMachine->GetState() : EMotionChargerState::Idle;
@@ -445,7 +514,6 @@ void ATransmitArenaCharger::SetEncounterActive(const bool bActive)
 
 void ATransmitArenaCharger::RestartEncounter()
 {
-    bResetScheduled = false;
     StopChargerCycle();
     Motion->RestoreInitialState(true);
     ReturnToHome();
@@ -474,26 +542,17 @@ void ATransmitArenaCharger::HandleArenaComponentHit(
         return;
     }
 
-    if (bResetScheduled)
+    if (auto* Player = Cast<ACharacter>(OtherActor))
     {
-        return;
+        Player->LaunchCharacter(DashDirection * 420.0f + FVector(0,0,180), true, true);
     }
-
-    if (!FindArenaResetController())
-    {
-        return;
-    }
-
-    bResetScheduled = true;
-    UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_PLAYABLE] Arena charger hit player; scheduling clean reset"));
-    GetWorld()->GetTimerManager().SetTimerForNextTick(
-        FTimerDelegate::CreateUObject(this, &ATransmitArenaCharger::TryArenaResetFromHit));
+    StateMachine->ForceRecovery();
+    UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_ARENA] Player contact -> guaranteed return"));
 }
 
 void ATransmitArenaCharger::HandleArenaPostRoomReset()
 {
     bEncounterActive = false;
-    bResetScheduled = false;
     LastFrameState = StateMachine ? StateMachine->GetState() : EMotionChargerState::Idle;
     ReturnToHome();
 
@@ -509,39 +568,11 @@ void ATransmitArenaCharger::BindArenaRoomResetController()
     }
 }
 
-void ATransmitArenaCharger::TryArenaResetFromHit()
-{
-    if (!bResetScheduled || !bEncounterActive)
-    {
-        return;
-    }
-    bResetScheduled = false;
-    TActorIterator<ATransmitLevelDirector> It(GetWorld());
-    if (It)
-    {
-        It->RequestLocalRetry();
-        return;
-    }
-
-    AMotionRoomResetController* Reset = FindArenaResetController();
-    if (!Reset)
-    {
-        return;
-    }
-
-    if (Reset->IsResetInProgress())
-    {
-        bResetScheduled = true;
-        GetWorld()->GetTimerManager().SetTimerForNextTick(
-            FTimerDelegate::CreateUObject(this, &ATransmitArenaCharger::TryArenaResetFromHit));
-        return;
-    }
-
-    Reset->RequestRoomReset();
-}
-
 void ATransmitArenaCharger::ReturnToHome()
 {
+    bReturningHome = false;
+    ReturnElapsed = 0;
+    Body->SetRelativeScale3D(FVector(1.25f));
     SetActorTransform(HomeTransform, false, nullptr, ETeleportType::TeleportPhysics);
 }
 
@@ -601,6 +632,18 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
     }
 
     UpdateFlow();
+    const float Now = GetWorld()->GetTimeSeconds();
+    const auto Say = [this, Now](const FString& Line) { Narrative = Line; NarrativeUntil = Now + 5.0f; };
+    if (!(NarrativeFlags & 1) && Now - RunStartSeconds > 1.5f)
+    { NarrativeFlags |= 1; Say(TEXT("板上的元件都有型号，修板的人却只叫临时工。")); }
+    if (Ram && Ram->bArmed && !(NarrativeFlags & 2))
+    { NarrativeFlags |= 2; Say(TEXT("他们都说自己领先。他只好先把路接上。")); }
+    if (bEntryTriggered && !(NarrativeFlags & 4))
+    { NarrativeFlags |= 4; Say(TEXT("户晨风：板修好了，人还没验。")); }
+    if (Ram && Ram->Hits == 1 && Charger && Charger->StateMachine->GetState() == EMotionChargerState::Recovery && !(NarrativeFlags & 8))
+    { NarrativeFlags |= 8; Say(TEXT("户晨风：用上苹果级动力，也不等于你就是苹果人。")); }
+    if (Ram && Ram->Hits >= 2 && !(NarrativeFlags & 16))
+    { NarrativeFlags |= 16; Say(TEXT("门上只写了检修通行。他替门加了出身。")); }
 
     const bool bGateBroken = Ram && Ram->Hits >= 2;
     if (bGateBroken && Charger && !bGateBrokenHandled)
@@ -631,6 +674,7 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
 
 void ATransmitLevelDirector::HandleDirectorPostRoomReset()
 {
+    NarrativeFlags = 0; Narrative.Reset(); NarrativeUntil = 0;
     Checkpoint = 0;
     LastRetrySeconds = -10.0f;
     bEntryTriggered = false;
@@ -806,6 +850,7 @@ bool ATransmitLevelDirector::RequestLocalRetry()
         if (Player->GetController()) Player->GetController()->SetControlRotation(SafeMarker->GetActorRotation());
     }
     if (auto* Character = Cast<ACharacter>(Player)) Character->GetCharacterMovement()->StopMovementImmediately();
+    if (Checkpoint == 2 && Ram) Ram->CancelStroke();
     if (Checkpoint == 2 && Charger)
     {
         if (Ram && Ram->Hits < 2) Charger->RestartEncounter();
@@ -871,56 +916,56 @@ bool ATransmitLevelDirector::GetPacingTutorial(FString& Chapter, FString& Object
     const bool bLoaded = Held && Held->HasMotionState();
     if (Position.X < -2500.0f && SlabFor(TEXT("Transmit.Pacing.LearnA")))
     {
-        Chapter = TEXT("01 / BOARD ASSEMBLY");
+        Chapter = TEXT("01 / 主板装配");
         if (Position.Y > 2600.0f)
         {
-            Objective = TEXT("Climb the inspection loop");
-            Hint = TEXT("Follow the white marks up the ramp. Look back at the crossings you repaired, then descend to the next board.");
+            Objective = TEXT("登上检修回廊");
+            Hint = TEXT("沿白色标记上坡。回望接通的桥，再下到另一块主板。");
         }
         else if (Position.X < -6100.0f)
         {
             const auto* Slab = SlabFor(TEXT("Transmit.Pacing.LearnA"));
-            Objective = Slab->Motion->HasMotionState() ? (Slab->IsMovementActive() ? TEXT("Bridge moving. Wait on the bank") : TEXT("Follow the bridge across"))
-                : bLoaded ? TEXT("Give the motion to the first bridge") : TEXT("Take motion from the moving source");
-            Hint = bLoaded ? TEXT("Stay on the bank. Face across the gap and Q to transfer. The preview arrow shows the direction.")
-                : Slab->Motion->HasMotionState() ? TEXT("The source stopped; the bridge carries its motion. Cross once it stops.")
-                : TEXT("Xuanwu motion: E captures and stops one object. Q transfers and moves another. Carry one motion at a time.");
+            Objective = Slab->Motion->HasMotionState() ? (Slab->IsMovementActive() ? TEXT("桥正在移动，留在岸上") : TEXT("沿桥通过"))
+                : bLoaded ? TEXT("把能量交给第一座桥") : TEXT("从运动的物体取出能量");
+            Hint = bLoaded ? TEXT("留在岸上，面向缺口，按 Q 传递。箭头显示运动方向。")
+                : Slab->Motion->HasMotionState() ? TEXT("能量源停了，桥接过了它的运动。桥停稳后再通过。")
+                : TEXT("玄武能量：E 取出并停止运动，Q 交出并驱动物体。一次只能携带一份。");
         }
         else
         {
             const auto* Slab = SlabFor(TEXT("Transmit.Pacing.LearnB"));
-            Objective = Slab && Slab->Motion->HasMotionState() ? (Slab->IsMovementActive() ? TEXT("Bridge moving. Wait on the bank") : TEXT("Cross to the inspection loop"))
-                : TEXT("Connect the northbound bridge");
+            Objective = Slab && Slab->Motion->HasMotionState() ? (Slab->IsMovementActive() ? TEXT("桥正在移动，留在岸上") : TEXT("前往检修回廊"))
+                : TEXT("接通向北的桥");
             Hint = Slab && Slab->Motion->HasMotionState()
-                ? TEXT("Cross after the bridge stops. Turn right at the landing and climb the inspection loop.")
-                : TEXT("E captures the nearby source. Stand south of the bridge, face north, then Q. Check the direction arrow.");
+                ? TEXT("桥停稳后通过，在平台右转登上回廊。")
+                : TEXT("E 取出附近能量。站在桥南侧，面向北方按 Q；先确认箭头。");
         }
         return true;
     }
     if (Ram && Ram->bArmed && !bEntryTriggered && SlabFor(TEXT("Transmit.Pacing.RouteA")))
     {
-        Chapter = TEXT("02 / UPPER SERVICE DECK");
+        Chapter = TEXT("02 / 上层检修台");
         const auto* First = SlabFor(TEXT("Transmit.Pacing.RouteA"));
         const auto* Second = SlabFor(TEXT("Transmit.Pacing.RouteB"));
         if (Second && Second->Motion->HasMotionState())
         {
-            Objective = Second->IsMovementActive() ? TEXT("Bridge moving. Wait on the bank") : TEXT("Descend to the upper interface");
-            Hint = TEXT("One motion restored two crossings. Follow the ramp down to the interface checkpoint.");
+            Objective = Second->IsMovementActive() ? TEXT("桥正在移动，留在岸上") : TEXT("下行至上层接口");
+            Hint = TEXT("同一份能量接通了两座桥。沿坡道下行，前往接口检查站。");
         }
         else if (Position.X < 6900.0f)
         {
-            Objective = First->Motion->HasMotionState() ? (First->IsMovementActive() ? TEXT("Bridge moving. Wait on the bank") : TEXT("Cross the service bridge"))
-                : bLoaded ? TEXT("Give the carried motion from the west bank") : TEXT("Climb to the service deck");
+            Objective = First->Motion->HasMotionState() ? (First->IsMovementActive() ? TEXT("桥正在移动，留在岸上") : TEXT("通过检修桥"))
+                : bLoaded ? TEXT("从西岸把能量交给桥") : TEXT("登上检修台");
             Hint = First->Motion->HasMotionState()
-                ? TEXT("Wait for the bridge to stop. Cross east, then look back: E recovers the same motion.")
-                : bLoaded ? TEXT("Stay on the west bank. Face east and Q to send the bridge; cross only after it stops.")
-                : TEXT("Follow the white marks up the south ramp. Both crossings on the upper deck share one motion.");
+                ? TEXT("桥停后向东通过，再回头按 E 取回同一份能量。踩上移动的桥也会令它停止。")
+                : bLoaded ? TEXT("留在西岸，面向东方按 Q。需要提前停止时，瞄准移动的桥再按 E。")
+                : TEXT("沿白色标记登上南侧坡道。上层的两座桥共用一份能量。");
         }
         else
         {
-            Objective = bLoaded ? TEXT("Restore the second service crossing") : TEXT("Look back. Recover your motion");
-            Hint = bLoaded ? TEXT("Carry it north. Stay on the bank, face along the second bridge and Q.")
-                : TEXT("Aim back at the bridge you crossed and E. The next crossing has no source.");
+            Objective = bLoaded ? TEXT("接通第二处检修缺口") : TEXT("回头，取回你的能量");
+            Hint = bLoaded ? TEXT("带着能量向北走。在岸上面向第二座桥按 Q。")
+                : TEXT("回头瞄准刚通过的桥，按 E。下一座桥没有新的能量源。");
         }
         return true;
     }
@@ -934,9 +979,9 @@ FString ATransmitLevelDirector::GetChapterText() const
     if (bCompletionShown)
     {
         const int32 Seconds = FMath::FloorToInt(CompletedRunSeconds);
-        return FString::Printf(TEXT("TRANSMIT / CONNECTION RESTORED / %02d:%02d"), Seconds / 60, Seconds % 60);
+        return FString::Printf(TEXT("TRANSMIT / 检修完成 / %02d:%02d"), Seconds / 60, Seconds % 60);
     }
-    return Checkpoint == 0 ? TEXT("01 / BOARD ASSEMBLY") : Checkpoint == 1 ? TEXT("02 / BUS RELAY") : TEXT("03 / UPPER INTERFACE");
+    return Checkpoint == 0 ? TEXT("01 / 主板装配") : Checkpoint == 1 ? TEXT("02 / 总线转接") : TEXT("03 / 户晨风的检查站");
 }
 
 FString ATransmitLevelDirector::GetObjectiveText() const
@@ -945,27 +990,27 @@ FString ATransmitLevelDirector::GetObjectiveText() const
     if (GetPacingTutorial(Chapter, Objective, Hint)) return Objective;
     switch (FlowStep)
     {
-    case ETransmitFlowStep::TakeMotion: return TEXT("Restore the crossing");
-    case ETransmitFlowStep::GiveBridge: return TEXT("Give the motion to the bridge");
+    case ETransmitFlowStep::TakeMotion: return TEXT("恢复通路");
+    case ETransmitFlowStep::GiveBridge: return TEXT("把能量交给桥");
     case ETransmitFlowStep::CrossBridge:
         return Bridge && Bridge->GetActorLocation().X > 1500.0f
-            ? TEXT("Cross the bridge") : TEXT("Move the bridge into the gap");
-    case ETransmitFlowStep::SendCarrier: return TEXT("Send motion through the low passage");
-    case ETransmitFlowStep::ChaseCarrier: return TEXT("Follow C-01 through the inspection gallery");
-    case ETransmitFlowStep::RecaptureCarrier: return TEXT("Take the motion back");
+            ? TEXT("通过连接桥") : TEXT("将桥移入缺口");
+    case ETransmitFlowStep::SendCarrier: return TEXT("把载体送入低矮通道");
+    case ETransmitFlowStep::ChaseCarrier: return TEXT("沿检修廊追上 C-01");
+    case ETransmitFlowStep::RecaptureCarrier: return TEXT("再次取回能量");
     case ETransmitFlowStep::RerouteCarrier:
         return Ram && Ram->RouteCarrier && Ram->RouteCarrier->Motion->HasMotionState()
-            ? TEXT("Deliver the relay to the dock") : TEXT("Turn the relay toward the dock");
-    case ETransmitFlowStep::ReachArena: return TEXT("Reach the interface checkpoint");
-    case ETransmitFlowStep::CaptureDash: return TEXT("Intercept a committed charge");
-    case ETransmitFlowStep::PowerRam: return TEXT("Deliver the captured charge to the Ram");
-    case ETransmitFlowStep::CaptureAgain: return TEXT("Gate fractured. Capture one more charge");
-    case ETransmitFlowStep::BreakGate: return TEXT("Break through with the final impact");
+            ? TEXT("把载体送入接口") : TEXT("让载体转向接口");
+    case ETransmitFlowStep::ReachArena: return TEXT("前往上层接口检查站");
+    case ETransmitFlowStep::CaptureDash: return TEXT("截取户晨风的冲刺");
+    case ETransmitFlowStep::PowerRam: return TEXT("给往返载体注入冲刺能量");
+    case ETransmitFlowStep::CaptureAgain: return TEXT("门已开裂，再截取一次冲刺");
+    case ETransmitFlowStep::BreakGate: return TEXT("在门前完成最后一次对撞");
     case ETransmitFlowStep::ObserveImpact:
-        return Ram && Ram->Hits >= 2 ? TEXT("Gate released")
-            : Ram && Ram->Hits == 1 ? TEXT("Gate fractured") : TEXT("Ram charged. Watch the gate");
-    case ETransmitFlowStep::Exit: return TEXT("Connection restored. Proceed through");
-    case ETransmitFlowStep::Complete: return TEXT("Work order complete");
+        return Ram && Ram->Hits >= 2 ? TEXT("通道已释放")
+            : Ram && Ram->Hits == 1 ? TEXT("门已开裂") : TEXT("载体突进中");
+    case ETransmitFlowStep::Exit: return TEXT("连接恢复，继续前进");
+    case ETransmitFlowStep::Complete: return TEXT("工单完成");
     }
     return FString();
 }
@@ -974,33 +1019,38 @@ FString ATransmitLevelDirector::GetHintText() const
 {
     FString Chapter, Objective, Hint;
     if (GetPacingTutorial(Chapter, Objective, Hint)) return Hint;
-    if (GetWorld()->GetTimeSeconds() - LastRetrySeconds < 3.0f) return TEXT("Recovered here. Your completed work is safe.");
+    if (GetWorld()->GetTimeSeconds() - LastRetrySeconds < 3.0f) return TEXT("已在本区恢复，完成的进度已保留。");
     switch (FlowStep)
     {
-    case ETransmitFlowStep::TakeMotion: return TEXT("Aim at the moving source. E to capture.");
-    case ETransmitFlowStep::GiveBridge: return TEXT("You are carrying it. Face across the gap; aim at the bridge and press Q.");
+    case ETransmitFlowStep::TakeMotion: return TEXT("瞄准运动的能量源，按 E 取出。");
+    case ETransmitFlowStep::GiveBridge: return TEXT("你已携带能量。面向缺口，瞄准桥按 Q。");
     case ETransmitFlowStep::CrossBridge:
         if (Bridge && (FMath::Abs(Bridge->GetActorLocation().Y) > 300.0f || Bridge->GetActorLocation().Z > 150.0f))
-            return TEXT("Off course. BACKSPACE restores the crossing; face across the gap before sending.");
-        return TEXT("The source stopped. The bridge now carries its motion.");
-    case ETransmitFlowStep::SendCarrier: return TEXT("Take the nearby source with E. Face down the passage; Q to send the carrier.");
-    case ETransmitFlowStep::ChaseCarrier: return TEXT("Motion takes the low route. You take the outer gallery.");
-    case ETransmitFlowStep::RecaptureCarrier: return TEXT("Stand at the relay's south side. Aim at the carrier; E to capture again.");
+            return TEXT("方向偏了。退格键恢复本区；传递前先面向缺口。");
+        return TEXT("能量源已停止，桥正在延续它的运动。");
+    case ETransmitFlowStep::SendCarrier: return TEXT("E 取出附近能量。面向通道，按 Q 驱动载体。");
+    case ETransmitFlowStep::ChaseCarrier: return TEXT("让运动走低处，你走外侧检修廊。");
+    case ETransmitFlowStep::RecaptureCarrier: return TEXT("站到载体南侧，瞄准它按 E，随时截停运动。");
     case ETransmitFlowStep::RerouteCarrier:
         if (Ram && Ram->RouteCarrier && Ram->RouteCarrier->Motion->HasMotionState())
             return Ram->RouteCarrier->IsMovementActive()
-                ? TEXT("The relay carries the motion. Watch it connect to the Ram.")
-                : TEXT("Stopped short? Take it back with E, or BACKSPACE to retry this area.");
-        return TEXT("Face the dock across the relay. The preview shows the new direction. Q to send.");
-    case ETransmitFlowStep::ReachArena: return TEXT("The delivered carrier armed the Ram. Follow the connected line.");
-    case ETransmitFlowStep::CaptureDash: return TEXT("Wait for the dash, then E. Its direction stays locked.");
+                ? TEXT("载体正在驶入接口，随后会送上竞技场轨道。")
+                : TEXT("中途停止了？按 E 取回再传递，或用退格键重试本区。");
+        return TEXT("隔着载体面向接口，确认方向预览后按 Q。");
+    case ETransmitFlowStep::ReachArena: return TEXT("你送来的 C-01 已接入往返轨道。沿连线前往检查站。");
+    case ETransmitFlowStep::CaptureDash: return TEXT("他会向你冲刺。红色预告锁定后侧移，在冲刺中瞄准他按 E。");
     case ETransmitFlowStep::PowerRam: case ETransmitFlowStep::BreakGate:
-        return TEXT("Circle to the marked rear of the Ram. Aim at it and press Q; watch the gate ahead.");
+        return TEXT("等他回到门前；载体与他对齐时，瞄准往返的 C-01 按 Q。它只向门前突进。");
     case ETransmitFlowStep::ObserveImpact:
-        return TEXT("The captured charge is driving the Ram. Follow the impact along its rail.");
-    case ETransmitFlowStep::CaptureAgain: return TEXT("The first hit held. Take another dash to finish the gate.");
-    case ETransmitFlowStep::Exit: return TEXT("Inspection complete. The upper interface is open.");
-    case ETransmitFlowStep::Complete: return TEXT("Connection restored. Operator: temporary. R starts a new work order.");
+        return TEXT("圆形冲击范围必须覆盖户晨风和门。落空不会造成门的损伤。");
+    case ETransmitFlowStep::CaptureAgain: return TEXT("第一次对撞已生效。再取出一次冲刺，在他回位后完成对撞。");
+    case ETransmitFlowStep::Exit: return TEXT("检修通道已开放。前往上层接口。");
+    case ETransmitFlowStep::Complete: return TEXT("连接已恢复。操作员：临时工。按 R 开始下一张工单。");
     }
     return FString();
+}
+
+FString ATransmitLevelDirector::GetNarrativeText() const
+{
+    return GetWorld()->GetTimeSeconds() < NarrativeUntil ? Narrative : FString();
 }
