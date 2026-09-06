@@ -177,3 +177,8 @@ FMotionCompatibilityResult ATransmitDirectionalCarrierActor::CanReceiveMotion_Im
     return RailController.IsValid() ? RailController->CanReceiveMotion_Implementation(State, Context)
         : IMotionTransferable::CanReceiveMotion_Implementation(State, Context);
 }
+
+FVector ATransmitDirectionalCarrierActor::GetReceiverOutputDirection(const FVector& Incoming) const
+{
+    return RailController.IsValid() ? RailController->GetCounterDirection() : Incoming;
+}

@@ -143,6 +143,10 @@ void ATransmitHUD::DrawHUD()
             LastHint = Hint;
             GuidanceChangedSeconds = Now;
         }
+        if (LastCheckpoint != It->GetCheckpointIndex() || Now - It->GetRunStartSeconds() < .1f)
+        { LastCheckpoint = It->GetCheckpointIndex(); CheckpointNoticeUntil = Now + 4.0f; }
+        if (bHelp || It->IsComplete())
+        {
         const auto& Lines = ObjectiveLines;
         const float Height = (78 + 32 * Lines.Num()) * Scale;
         DrawRect(FLinearColor(.025f, .038f, .048f, .82f), Margin, Margin, Width, Height);
@@ -152,15 +156,24 @@ void ATransmitHUD::DrawHUD()
         for (int32 Index = 0; Index < Lines.Num(); ++Index)
             Label(Lines[Index], Margin + 20*Scale, Margin + (65+32*Index)*Scale, 1.9f, FLinearColor::White);
 
-        if (It->Ram && It->Ram->bArmed && It->Charger
+        }
+        else if (Now < CheckpointNoticeUntil || Now - It->GetLastRetrySeconds() < 2.0f)
+        {
+            DrawRect(FLinearColor(.025f,.038f,.048f,.72f),Margin,Margin,280*Scale,58*Scale);
+            const FString Chapters[] = {TEXT("01 / 米工装配区"), TEXT("02 / 华序总线区"), TEXT("03 / 白果接口")};
+            Label(Chapters[FMath::Clamp(LastCheckpoint,0,2)],Margin+16*Scale,Margin+10*Scale,1.15f,NeutralColor);
+            Label(TEXT("检修记录已保存"),Margin+16*Scale,Margin+32*Scale,.9f,NeutralColor);
+        }
+
+        if (It->IsBossIntroduced() && It->Ram && It->Ram->bArmed && It->Charger
             && It->GetFlowStep() != ETransmitFlowStep::ReachArena && !It->IsComplete())
         {
             const float X = Canvas->SizeX*.5f-130*Scale;
             const auto State = It->Charger->StateMachine->GetState();
             const FString Phase = It->Ram->Hits>=2 ? TEXT("检修通行")
                 : State==EMotionChargerState::Telegraph ? TEXT("锁定位置")
-                : State==EMotionChargerState::Dash ? TEXT("冲刺 · E 截取")
-                : State==EMotionChargerState::Recovery ? TEXT("回位 · 准备对撞") : TEXT("门前待机");
+                : State==EMotionChargerState::Dash ? TEXT("冲刺")
+                : State==EMotionChargerState::Recovery ? TEXT("回位") : TEXT("门前待机");
             DrawRect(FLinearColor(.025f,.038f,.048f,.86f),X-14*Scale,Margin-8*Scale,232*Scale,68*Scale);
             Label(TEXT("户晨风 / 首席分等官"),X,Margin,1.25f,FLinearColor(.96f,.89f,.74f));
             Label(Phase,X,Margin+24*Scale,1.0f,NeutralColor);
@@ -171,8 +184,7 @@ void ATransmitHUD::DrawHUD()
 
         // A short contextual lesson appears on a state change; hold Tab to recall it.
         // Moving/blocked/loaded distinctions are actual actor state, not tutorial timers.
-        const float HintAlpha = bHelp || It->IsComplete() ? 1.0f
-            : FMath::Clamp((12.0f - (Now - GuidanceChangedSeconds)) / 1.0f, 0.0f, 1.0f);
+        const float HintAlpha = bHelp ? 1.0f : 0.0f;
         if (HintAlpha > 0)
         {
             const auto& Hints = HintLines;
@@ -190,7 +202,7 @@ void ATransmitHUD::DrawHUD()
             DrawRect(FLinearColor(.015f,.022f,.03f,.8f), (Canvas->SizeX-W)*.5f-16*Scale, Canvas->SizeY*.73f-8*Scale, W+32*Scale, 38*Scale);
             Label(Narrative, (Canvas->SizeX-W)*.5f, Canvas->SizeY*.73f, 1.25f, FLinearColor(.96f,.89f,.74f));
         }
-        Label(TEXT("TAB  查看引导"), Margin, Canvas->SizeY-38*Scale, 1.0f, NeutralColor);
+        Label(TEXT("TAB  检修器"), Margin, Canvas->SizeY-38*Scale, 1.0f, NeutralColor);
         const FString Controls = bHelp
             ? TEXT("WASD 移动   鼠标 瞄准   空格 跳跃   E 取出/截停   Q 传递   退格 本区重试   R 重新开始")
             : TEXT("退格  本区重试     R  重新开始");

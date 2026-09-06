@@ -59,6 +59,8 @@ void ATransmitRam::BeginPlay()
 
     CacheInitialTransforms();
     RailCenter = GetActorLocation();
+    TActorIterator<ATransmitArenaCharger> BossIt(GetWorld());
+    if (BossIt) CounterBoss = *BossIt;
     RailPhase = RailHalfSpan;
     Body->SetVisibility(false);
     SetActorEnableCollision(false);
@@ -97,6 +99,7 @@ void ATransmitRam::Tick(const float DeltaSeconds)
         const float Offset = RailPhase <= 2 * Span ? RailPhase - Span : 3 * Span - RailPhase;
         const FVector Side = FVector::CrossProduct(FVector::UpVector, FixedAxis).GetSafeNormal();
         RouteCarrier->SetActorLocation(RailCenter + Side * Offset, false);
+        RouteCarrier->SetActorRotation(GetCounterDirection().Rotation());
         return;
     }
 
@@ -104,7 +107,7 @@ void ATransmitRam::Tick(const float DeltaSeconds)
     if (!bReturningBody)
     {
         const float T = FMath::Clamp(ImpactElapsed / ImpactApproachSeconds, 0.0f, 1.0f);
-        const FVector Destination = StrokeStart + FixedAxis.GetSafeNormal() * ImpactDistance * T;
+        const FVector Destination = StrokeStart + StrokeDirection * ImpactDistance * T;
         FHitResult Hit;
         RouteCarrier->SetActorLocation(Destination, true, &Hit);
         if (Hit.bBlockingHit || T >= 1)
@@ -119,6 +122,7 @@ void ATransmitRam::Tick(const float DeltaSeconds)
     {
         const float T = FMath::Clamp(ImpactElapsed / ImpactReturnSeconds, 0.0f, 1.0f);
         RouteCarrier->SetActorLocation(FMath::Lerp(StrikePosition, StrokeStart, T), false);
+        if (bWeakStrike && Gate) Gate->SetActorRotation(InitialGateRotation+FRotator(.8f*(1-T),0,.4f*(1-T)));
         if (T >= 1) { bInFlightImpact = false; bReturningBody = false; }
     }
 }
@@ -126,6 +130,14 @@ void ATransmitRam::Tick(const float DeltaSeconds)
 void ATransmitRam::ResolveStrike()
 {
     ++StrikeSerial;
+    bLastStrikeWeak = bWeakStrike;
+    if (bWeakStrike)
+    {
+        bStrikeHitBoss = false;
+        if (Gate) Gate->SetActorRotation(InitialGateRotation+FRotator(.8f,0,.4f));
+        UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_ARENA] Weak commissioning contact center=%s hits=%d"), *StrikePosition.ToString(), Hits);
+        return;
+    }
     bStrikeHitBoss = false;
     for (TActorIterator<ATransmitArenaCharger> It(GetWorld()); It; ++It)
     {
@@ -153,9 +165,11 @@ void ATransmitRam::ResolveStrike()
 void ATransmitRam::CancelStroke()
 {
     if (bInFlightImpact && RouteCarrier) RouteCarrier->SetActorLocation(StrokeStart, false);
+    if (bWeakStrike && Gate && Hits==0) Gate->SetActorRotation(InitialGateRotation);
     bInFlightImpact = false;
     bReturningBody = false;
     ImpactElapsed = 0;
+    bWeakStrike = false;
 }
 
 FMotionCompatibilityResult ATransmitRam::CanReceiveMotion_Implementation(
@@ -225,6 +239,7 @@ void ATransmitRam::HandleRamPostRoomReset()
     RailPhase = RailHalfSpan;
     StrikeSerial = 0;
     Hits = 0;
+    bWeakStrike = false; bLastStrikeWeak = false;
     bInFlightImpact = false;
     bReturningBody = false;
     ImpactElapsed = 0.0f;
@@ -335,11 +350,36 @@ void ATransmitRam::LatchArmIfReady()
 
 void ATransmitRam::BeginImpactAnimation()
 {
-    bInFlightImpact = true;
+    bInFlightImpact = false;
     bReturningBody = false;
     ImpactElapsed = 0.0f;
 
     StrokeStart = RouteCarrier ? RouteCarrier->GetActorLocation() : GetActorLocation();
+    bWeakStrike = false;
+    StrokeDirection = GetCounterDirection();
+    bInFlightImpact = true;
+    UE_LOG(LogTemp,Log,TEXT("[TRANSMIT_ARENA] Locked stroke start=%s direction=%s"),*StrokeStart.ToString(),*StrokeDirection.ToString());
+}
+
+FVector ATransmitRam::GetCounterDirection() const
+{
+    if (bInFlightImpact) return StrokeDirection;
+    const FVector Start = RouteCarrier ? RouteCarrier->GetActorLocation() : GetActorLocation();
+    const FVector Target = CounterBoss.IsValid() ? CounterBoss->GetActorLocation()
+        : Gate ? Gate->GetActorLocation() : Start + FixedAxis;
+    const FVector Direction = (Target - Start).GetSafeNormal2D();
+    return Direction.IsNearlyZero() ? FixedAxis.GetSafeNormal() : Direction;
+}
+
+bool ATransmitRam::BeginCommissioningStrike()
+{
+    if (!bArmed || bDockTransit || bInFlightImpact || !RouteCarrier || Hits) return false;
+    // The ordinary route's commissioning cycle makes real contact, never a High hit.
+    RouteCarrier->SetActorLocation(RailCenter, false);
+    RailPhase = RailHalfSpan;
+    BeginImpactAnimation();
+    bWeakStrike = true;
+    return true;
 }
 
 void ATransmitRam::ApplyGateImpact()
@@ -379,7 +419,7 @@ void ATransmitRam::ApplyGateImpact()
             }
 
             Gate->SetActorLocation(
-                InitialGateLocation + FVector(0.0f, 0.0f, 650.0f),
+                InitialGateLocation + FVector(0.0f, 0.0f, Gate->GetComponentsBoundingBox(true).GetSize().Z + 180.0f),
                 false,
                 nullptr,
                 ETeleportType::TeleportPhysics);
@@ -475,7 +515,7 @@ void ATransmitArenaCharger::Tick(const float DeltaSeconds)
             ReturnElapsed = 0;
         }
         ReturnElapsed += DeltaSeconds;
-        const float T = FMath::Clamp((ReturnElapsed - 0.35f) / 0.8f, 0.0f, 1.0f);
+        const float T = FMath::Clamp((ReturnElapsed - 0.16f) / 0.55f, 0.0f, 1.0f);
         // Unobstructed recovery guarantees the gate-front anchor even after a miss,
         // capture, player collision, or scenery collision. The remaining recovery is a punish window.
         SetActorLocation(FMath::Lerp(RecoveryStart, HomeTransform.GetLocation(), FMath::SmoothStep(0.0f, 1.0f, T)), false);
@@ -487,6 +527,13 @@ void ATransmitArenaCharger::Tick(const float DeltaSeconds)
         UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_ARENA] Return=%d home=%s"), CompletedReturns, *GetActorLocation().ToString());
     }
     LastFrameState = Current;
+}
+
+FMotionCompatibilityResult ATransmitArenaCharger::CanCaptureMotion_Implementation(const FMotionTransferContext& Context) const
+{
+    if (Context.Requester && FVector::DistSquared2D(Context.Requester->GetActorLocation(), GetActorLocation()) > FMath::Square(CaptureRadius))
+        return FMotionCompatibilityResult::Reject(EMotionTransferRejection::OutOfRange);
+    return Super::CanCaptureMotion_Implementation(Context);
 }
 
 void ATransmitArenaCharger::ReceiveRailImpact()
@@ -625,31 +672,54 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
         bEntryTriggered = true;
         EncounterStartSeconds = GetWorld()->GetTimeSeconds();
 
-        if (Charger)
+    }
+    // Quiet arrival and a real low-strength commissioning stroke precede the inspector.
+    if (bEntryTriggered && !bBossIntroduced && Ram && Charger)
+    {
+        const float EntryAge = GetWorld()->GetTimeSeconds() - EncounterStartSeconds;
+        if (!bCommissioningStarted && EntryAge > .8f) bCommissioningStarted = Ram->BeginCommissioningStrike();
+        if (bCommissioningStarted && !Ram->IsImpactInProgress() && EntryAge > 3.0f)
         {
+            bBossIntroduced = true;
+            Charger->SetActorHiddenInGame(false); Charger->SetActorEnableCollision(true);
             Charger->SetEncounterActive(true);
+            if (AccessSign.IsValid()) AccessSign->SetActorHiddenInGame(false);
         }
     }
 
     UpdateFlow();
     const float Now = GetWorld()->GetTimeSeconds();
-    const auto Say = [this, Now](const FString& Line) { Narrative = Line; NarrativeUntil = Now + 5.0f; };
+    const auto Say = [this, Now](const FString& Line) { Narrative = Line; NarrativeUntil = Now + 4.0f; };
+    if (Ram && Ram->WasWeakStrike() && !(NarrativeFlags & 256))
+    { NarrativeFlags |= 256; Say(TEXT("检修试车：冲击强度不足。")); }
     if (!(NarrativeFlags & 1) && Now - RunStartSeconds > 1.5f)
     { NarrativeFlags |= 1; Say(TEXT("板上的元件都有型号，修板的人却只叫临时工。")); }
-    if (Ram && Ram->bArmed && !(NarrativeFlags & 2))
+    if (Ram && Ram->bArmed && !Ram->IsDocking() && !(NarrativeFlags & 2))
     { NarrativeFlags |= 2; Say(TEXT("他们都说自己领先。他只好先把路接上。")); }
-    if (bEntryTriggered && !(NarrativeFlags & 4))
+    if (bBossIntroduced && !(NarrativeFlags & 4))
     { NarrativeFlags |= 4; Say(TEXT("户晨风：板修好了，人还没验。")); }
     if (Ram && Ram->Hits == 1 && Charger && Charger->StateMachine->GetState() == EMotionChargerState::Recovery && !(NarrativeFlags & 8))
     { NarrativeFlags |= 8; Say(TEXT("户晨风：用上苹果级动力，也不等于你就是苹果人。")); }
     if (Ram && Ram->Hits >= 2 && !(NarrativeFlags & 16))
     { NarrativeFlags |= 16; Say(TEXT("门上只写了检修通行。他替门加了出身。")); }
 
+    // Broadcast fragments follow observed route actions and are never queued.
+    if (Checkpoint == 1 && !bEntryTriggered && Ram && Ram->RouteCarrier && NarrativeUntil < Now)
+    {
+        const auto* Carrier = Ram->RouteCarrier.Get();
+        if (!(NarrativeFlags & 32) && Carrier->Motion->HasMotionState() && Carrier->GetActorLocation().X > 3500)
+        { NarrativeFlags |= 32; Say(TEXT("米工演示：一千万以内最好的 SUV。编号：C-01。")); }
+        else if (!(NarrativeFlags & 64) && PlayerLocation.X > 4000 && PlayerLocation.X < 5300)
+        { NarrativeFlags |= 64; Say(TEXT("华序播报：领先同行 50%。——演示台高度。")); }
+        else if (!(NarrativeFlags & 128) && Carrier->GetActorLocation().X > 5200 && !Carrier->Motion->HasMotionState() && !Ram->bArmed)
+        { NarrativeFlags |= 128; Narrative.Reset(); NarrativeUntil = 0; }
+    }
     const bool bGateBroken = Ram && Ram->Hits >= 2;
     if (bGateBroken && Charger && !bGateBrokenHandled)
     {
         bGateBrokenHandled = true;
         Charger->SetEncounterActive(false);
+        if (AccessSign.IsValid()) AccessSign->SetActorHiddenInGame(true);
     }
 
     if (ExitMarker
@@ -675,6 +745,9 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
 void ATransmitLevelDirector::HandleDirectorPostRoomReset()
 {
     NarrativeFlags = 0; Narrative.Reset(); NarrativeUntil = 0;
+    bCommissioningStarted = false; bBossIntroduced = false;
+    if (Charger) { Charger->SetActorHiddenInGame(true); Charger->SetActorEnableCollision(false); }
+    if (AccessSign.IsValid()) AccessSign->SetActorHiddenInGame(true);
     Checkpoint = 0;
     LastRetrySeconds = -10.0f;
     bEntryTriggered = false;
@@ -711,6 +784,7 @@ void ATransmitLevelDirector::BindDirectorRoomResetController()
     // Full-room reset already restores the Motion snapshots for these participants.
     for (TActorIterator<AActor> It(GetWorld()); It; ++It)
     {
+        if (It->ActorHasTag(TEXT("Transmit.AccessSign"))) { AccessSign = *It; It->SetActorHiddenInGame(true); }
         if (ATransmitBridgeSlab* Slab = Cast<ATransmitBridgeSlab>(*It))
         {
             for (const FName Tag : Slab->Tags)
@@ -723,6 +797,7 @@ void ATransmitLevelDirector::BindDirectorRoomResetController()
         FMotionState State;
         if (Motion->TryGetMotionState(State) && !State.SourceId.IsNone()) PacingResourceIds.AddUnique(State.SourceId);
     }
+    if (Charger) { Charger->SetActorHiddenInGame(true); Charger->SetActorEnableCollision(false); }
     if (RouteSource)
     {
         RouteSourceStart = RouteSource->GetActorTransform();
@@ -769,13 +844,13 @@ void ATransmitLevelDirector::UpdateFlow()
     if (!Player || bCompletionShown) return;
     const UMotionTransferComponent* Held = Player->FindComponentByClass<UMotionTransferComponent>();
     const bool bLoaded = Held && Held->HasMotionState();
-    if (Ram && Ram->bArmed) Checkpoint = 2;
+    if (bEntryTriggered) Checkpoint = 2;
     else if (RouteEntryMarker && Player->GetActorLocation().X >= RouteEntryMarker->GetActorLocation().X)
         Checkpoint = FMath::Max(Checkpoint, 1);
 
     if (Ram && Ram->IsImpactInProgress()) SetFlowStep(ETransmitFlowStep::ObserveImpact);
     else if (Ram && Ram->Hits >= 2) SetFlowStep(ETransmitFlowStep::Exit);
-    else if (Checkpoint == 2)
+    else if (Ram && Ram->bArmed)
     {
         if (!bEntryTriggered) SetFlowStep(ETransmitFlowStep::ReachArena);
         else if (bLoaded) SetFlowStep(Ram->Hits == 0 ? ETransmitFlowStep::PowerRam : ETransmitFlowStep::BreakGate);
@@ -804,8 +879,15 @@ bool ATransmitLevelDirector::RequestLocalRetry()
     if (!Player || GetWorld()->GetTimeSeconds() - LastRetrySeconds < 0.5f) return false;
     auto* PlayerMotion = Player->FindComponentByClass<UMotionTransferComponent>();
     if (!PlayerMotion || PlayerMotion->IsTransactionInProgress() || PlayerMotion->IsDispatchingNotifications()) return false;
-    if (Checkpoint == 0 || bCompletionShown) return TryRequestRoomReset();
-    if (Checkpoint == 2 && !bEntryTriggered && !PacingRetryActors.IsEmpty())
+    if (bCompletionShown) return TryRequestRoomReset();
+    if (Checkpoint == 0)
+    {
+        const int32 SeenNarrative = NarrativeFlags;
+        const bool Reset = TryRequestRoomReset();
+        if (Reset) { NarrativeFlags = SeenNarrative; LastRetrySeconds = GetWorld()->GetTimeSeconds(); }
+        return Reset;
+    }
+    if (Ram && Ram->bArmed && !bEntryTriggered && !PacingRetryActors.IsEmpty())
         return RequestTransitionRetry(Player, PlayerMotion);
 
     // This is a level retry, not a new room snapshot: restore only this stage's
@@ -853,7 +935,7 @@ bool ATransmitLevelDirector::RequestLocalRetry()
     if (Checkpoint == 2 && Ram) Ram->CancelStroke();
     if (Checkpoint == 2 && Charger)
     {
-        if (Ram && Ram->Hits < 2) Charger->RestartEncounter();
+        if (Ram && Ram->Hits < 2 && bBossIntroduced) Charger->RestartEncounter();
         else Charger->SetEncounterActive(false);
     }
     UpdateFlow();
@@ -1038,9 +1120,9 @@ FString ATransmitLevelDirector::GetHintText() const
                 : TEXT("中途停止了？按 E 取回再传递，或用退格键重试本区。");
         return TEXT("隔着载体面向接口，确认方向预览后按 Q。");
     case ETransmitFlowStep::ReachArena: return TEXT("你送来的 C-01 已接入往返轨道。沿连线前往检查站。");
-    case ETransmitFlowStep::CaptureDash: return TEXT("他会向你冲刺。红色预告锁定后侧移，在冲刺中瞄准他按 E。");
+    case ETransmitFlowStep::CaptureDash: return TEXT("他会向你冲刺。红色预告锁定后侧移，在自身两格内瞄准他按 E。");
     case ETransmitFlowStep::PowerRam: case ETransmitFlowStep::BreakGate:
-        return TEXT("等他回到门前；载体与他对齐时，瞄准往返的 C-01 按 Q。它只向门前突进。");
+        return TEXT("等他回到门前；瞄准往返的苹果折叠屏按 Q。它锁定他的位置后直线突进。");
     case ETransmitFlowStep::ObserveImpact:
         return TEXT("圆形冲击范围必须覆盖户晨风和门。落空不会造成门的损伤。");
     case ETransmitFlowStep::CaptureAgain: return TEXT("第一次对撞已生效。再取出一次冲刺，在他回位后完成对撞。");
@@ -1052,5 +1134,11 @@ FString ATransmitLevelDirector::GetHintText() const
 
 FString ATransmitLevelDirector::GetNarrativeText() const
 {
+    if (Charger && bBossIntroduced && Ram && Ram->Hits < 2)
+    {
+        const auto State = Charger->StateMachine->GetState();
+        if (State == EMotionChargerState::Dash || State == EMotionChargerState::Telegraph
+            || (State == EMotionChargerState::Recovery && Charger->StateMachine->GetElapsedInState() < .65f)) return FString();
+    }
     return GetWorld()->GetTimeSeconds() < NarrativeUntil ? Narrative : FString();
 }

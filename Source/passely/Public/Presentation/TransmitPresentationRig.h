@@ -109,6 +109,8 @@ private:
     TWeakObjectPtr<AActor> PreviousViewTarget;
     float TeachingCameraUntil=0;
     void EndTeachingCamera();
+    void BeginReveal(const FVector& Focus);
+    bool bDockRevealSeen=false;
     TWeakObjectPtr<ADirectionalLight> ProgressSun;
     FRotator InitialSunRotation;
     FLinearColor InitialSunColor;

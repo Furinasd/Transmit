@@ -289,10 +289,9 @@ All baseline actors are retained; the authoring evidence records exact changes.
 
 `ATransmitHUD` presents a compact work order, actual carry status, and contextual
 E/Q affordances from the existing eligibility preview. The director still chooses
-objectives from real participant state. Detailed guidance displays for 12 seconds
-after a change and remains available while Tab is held. A new run start resets
-that presentation timer, including R while the objective is unchanged. No input
-mapping, reflected authoring property or gameplay permission is introduced.
+objectives from real participant state. Following the latest playtest, detailed
+guidance is displayed only while Tab is held; default chapter/checkpoint notices
+are brief. No input mapping or reflected authoring property is introduced.
 Scene plaques use the existing material palette and simple host-hardware geometry;
 world naming does not change Motion state, magnitude or compatibility.
 
@@ -302,3 +301,11 @@ world naming does not change Motion state, magnitude or compatibility.
 `ATransmitArenaCharger` keeps the existing Charger FSM. Idle aims at the player, telegraph locks that direction, recovery retires uncaptured Motion and returns to the authored home transform. Idle waits while the player still holds this dash source, avoiding duplicate ownership. Contact knocks the player back and enters recovery; a fall still uses local retry.
 
 The Ram's `RailHalfSpan`, `RailSpeed`, `ImpactRadius`, `FixedAxis`, and `ImpactDistance` remain local authoring parameters. Core Motion interfaces and atomic transfer behavior are unchanged. The level's existing events drive narration and the existing bounded PresentationRig pools. HUD wrapping caches layouts and uses a transient runtime UFont with the engine composite typeface. A map-tagged movable sun supports progression; an optional dock glance cancels on input. No new gameplay subsystem or general framework was added. See `Docs/dev/20260907-boss-rail-polish.md` for cost boundaries and paper-only Zone 2 proposals.
+
+### Experience refinement (2026-09-07 playtest)
+
+`ATransmitRam` caches the single arena Boss and locks a ground-plane output vector at consumption. `ATransmitDirectionalCarrierActor::GetReceiverOutputDirection` gives the interactor the target device's converted output for preview; transaction context still carries the original PreserveSource input. The stroke and persistent visual direction use the same locked vector. The ordinary dock commissioning stroke shares the existing movement/return code but never calls High gate damage.
+
+`ATransmitArenaCharger::CanCaptureMotion_Implementation` owns the player-centred 1000 cm encounter exception. The core interactor still checks aim/occlusion and revalidates commit; ordinary sources retain their prior range. Director advances the third checkpoint only at actual arena entry and handles a quiet arrival/commissioning/reveal on the existing level timeline. Local retries retain story flags; full reset restores them. HUD instruction details are opt-in via held Tab.
+
+Static narrative textures/materials live in `/Game/Transmit/Presentation/Narrative`; their eight scene instances carry world/story information without a runtime text system. The floor repair keeps original collision components, disables rendering only on clipped floors, and authors disjoint non-colliding visible cube pieces. Unchanged complete floor faces retain their original rendering without duplicate actors. No new tick actor class or persistent subsystem was introduced. See `dev/20260907-experience-refinement.md` for exact scope and evidence boundaries.

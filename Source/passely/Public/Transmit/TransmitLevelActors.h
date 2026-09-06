@@ -12,6 +12,7 @@ class UBoxComponent;
 class USceneComponent;
 class AMotionRoomResetController;
 class APawn;
+class ATransmitArenaCharger;
 
 UENUM(BlueprintType)
 enum class ETransmitFlowStep : uint8
@@ -51,6 +52,11 @@ public:
     bool DidStrikeBoss() const { return bStrikeHitBoss; }
     float GetImpactRadius() const { return ImpactRadius; }
     void CancelStroke();
+    FVector GetCounterDirection() const;
+    bool IsDocking() const { return bDockTransit; }
+    bool BeginCommissioningStrike();
+    bool WasWeakStrike() const { return bLastStrikeWeak; }
+
 
 
     UPROPERTY(BlueprintAssignable, Category = "Transmit|Events")
@@ -107,6 +113,10 @@ protected:
 private:
     FVector RailCenter = FVector::ZeroVector;
     FVector StrokeStart = FVector::ZeroVector;
+    FVector StrokeDirection = FVector::ForwardVector;
+    TWeakObjectPtr<ATransmitArenaCharger> CounterBoss;
+    bool bWeakStrike = false;
+    bool bLastStrikeWeak = false;
     FVector StrikePosition = FVector::ZeroVector;
     float RailPhase = 0;
     int32 StrikeSerial = 0;
@@ -162,6 +172,8 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Transmit|Arena")
     void SetEncounterActive(bool bActive);
 
+    static constexpr float CaptureRadius = 1000.0f;
+    virtual FMotionCompatibilityResult CanCaptureMotion_Implementation(const FMotionTransferContext& Context) const override;
     void RestartEncounter();
     void ReceiveRailImpact();
     FVector GetHomeLocation() const { return HomeTransform.GetLocation(); }
@@ -236,6 +248,10 @@ public:
     FString GetHintText() const;
     FString GetChapterText() const;
     float GetRunStartSeconds() const { return RunStartSeconds; }
+    int32 GetCheckpointIndex() const { return Checkpoint; }
+    float GetLastRetrySeconds() const { return LastRetrySeconds; }
+    bool IsArenaEntered() const { return bEntryTriggered; }
+    bool IsBossIntroduced() const { return bBossIntroduced; }
 
 
     virtual void Tick(float DeltaSeconds) override;
@@ -270,6 +286,9 @@ private:
     int32 NarrativeFlags = 0;
     FString Narrative;
     float NarrativeUntil = 0;
+    bool bCommissioningStarted = false;
+    bool bBossIntroduced = false;
+    TWeakObjectPtr<AActor> AccessSign;
     float StepStartedSeconds = 0.0f;
     float LastRetrySeconds = -10.0f;
     FName RouteResourceId = NAME_None;

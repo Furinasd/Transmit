@@ -251,3 +251,15 @@ This amendment supersedes the previous fixed-axis Charger and separate animated 
 - Also authorized: Chinese guidance/narrative, overlap repair, area-driven lighting/sky, brief teaching camera cues, and Zone 2 puzzle exploration. These do not authorize changing the single-resource transfer invariant.
 
 Acceptance: native build + regression tests; L_TestChamber hit/miss/capture/contact-return checks; production PIE observes physical delivery, rail reversal, Q conversion, circular hit/miss, two-hit gate, retry/reset. Human review still owns combat feel, readability and final composition.
+
+## 2026-09-07 Experience refinement (explicit playtest feedback)
+
+- Weak guidance: ambient hardware/signs, motion and consequences teach the loop. Detailed solution text appears only while Tab is held. Zone/checkpoint notices are brief; narration never gates movement or queues over danger.
+- The rail counterweapon is named 苹果折叠屏 (C-01 remains its identity). At Q commitment it aims at the Boss's current ground position, then locks the straight stroke. Preview and visible orientation use that same output. This supersedes the previous fixed-world-axis counterstroke; captured Motion itself still preserves its original direction. No homing after launch.
+- Arena tiles are approximately 500 cm. Two tiles means a 1000 cm horizontal capture radius measured from the player actor centre, only within the Boss room. Occlusion, aim and committed E timing still apply; Q reach outside this exception is unchanged.
+- Three session checkpoints correspond to entering Learn, Route and Weaponize. Backspace/falls return locally, retaining earlier-zone success, dock completion and committed gate damage; R restarts the whole work order. No disk persistence/save-game system.
+- Widen/tallify the final gate/opening and exit approach; add side cover outside the complete rail/aim fan. Speed up the Boss cycle while preserving committed warning and guaranteed return.
+- Integrate STANDARD 04 via scene signage, three sparse narrator lines, contextual institutional/boss text, the physical weak commissioning strike, the removable self-appointed access sign and restored original notice. No dialogue tree, extra faction rules or licensed voice/video.
+- Increase staged map-local light/sky contrast and strengthen capture/impact/reveal presentation. Input always overrides reveal cameras; no camera hijack in a live dash.
+
+Acceptance: clean playable traversal; off-centre locked counterstroke; capture boundary and cover occlusion; all three local checkpoints and repeated full reset; no overlapping visible floor tops; Chinese quiet/help/scene signage runtime inspection; Mac build/test/package. Feel and foreground performance remain human acceptance.

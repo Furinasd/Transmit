@@ -22,6 +22,7 @@ public:
 
     virtual void Tick(float DeltaSeconds) override;
     void SetRailController(ATransmitRam* Controller);
+    FVector GetReceiverOutputDirection(const FVector& Incoming) const;
     virtual FMotionCompatibilityResult CanReceiveMotion_Implementation(const FMotionState& State, const FMotionTransferContext& Context) const override;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Motion")

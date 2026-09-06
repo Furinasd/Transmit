@@ -118,6 +118,10 @@ bool FTransmitBossReaimTest::RunTest(const FString&)
     TestTrue(TEXT("Next dash grants fresh energy"),Boss->Motion->TryGetMotionState(Second));
     TestTrue(TEXT("Next dash does not reuse the previous direction"),Second.Direction.Equals(FVector::RightVector,.01f));
     FMotionTransferContext Context;
+    Context.Requester = Player;
+    TestEqual(TEXT("Arena rejects capture outside the player-centred two-tile radius"),
+        Held->TryCaptureFromActor(Boss,Context).Rejection,EMotionTransferRejection::OutOfRange);
+    Player->SetActorLocation(Boss->GetActorLocation()+FVector(999,0,0));
     TestTrue(TEXT("Real actor capture succeeds during committed dash"),Held->TryCaptureFromActor(Boss,Context).bSucceeded);
     for(int32 I=0;I<250;++I) Boss->Tick(.05f);
     TestTrue(TEXT("Capture also returns home"),Boss->GetActorLocation().Equals(FVector(0,0,100),.01f));
@@ -126,5 +130,36 @@ bool FTransmitBossReaimTest::RunTest(const FString&)
     TestEqual(TEXT("Boss waits at home until that resource is used"),FSM->GetState(),EMotionChargerState::Idle);
     World->DestroyWorld(false);
     return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTransmitCounterAimTest,
+    "Transmit.Playable.CounterStrokeLocksBossPosition",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FTransmitCounterAimTest::RunTest(const FString&)
+{
+    UWorld* World=UWorld::CreateWorld(EWorldType::Game,false);
+    World->InitializeActorsForPlay(FURL());
+    auto* Boss=World->SpawnActor<ATransmitArenaCharger>(FVector(900,0,100),FRotator::ZeroRotator);
+    auto* Carrier=World->SpawnActor<ATransmitDirectionalCarrierActor>(FVector(0,400,100),FRotator::ZeroRotator);
+    auto* Ram=World->SpawnActor<ATransmitRam>();
+    Ram->RouteCarrier=Carrier; Ram->DispatchBeginPlay(); Ram->bArmed=true;
+    Carrier->SetRailController(Ram);
+    Carrier->Motion->ConfigureForTesting(TEXT("Carrier"),false,true,EMotionEndpointMode::ConsumeOnReceive,{});
+    auto* Player=NewObject<UMotionTransferComponent>();
+    FMotionState Dash;Dash.Direction=-FVector::ForwardVector;Dash.DirectionPolicy=EMotionDirectionPolicy::PreserveSource;Dash.Magnitude=1250;Dash.SourceId=TEXT("Aim.Dash");
+    Player->ConfigureForTesting(TEXT("Player"),false,true,EMotionEndpointMode::Store,Dash);
+    const FVector Expected=(Boss->GetActorLocation()-Carrier->GetActorLocation()).GetSafeNormal2D();
+    TestTrue(TEXT("Off-centre output preview targets Boss, not input dash direction"),Carrier->GetReceiverOutputDirection(Dash.Direction).Equals(Expected,.001f));
+    FMotionTransferContext Context;Context.DirectionResolution=FMotionDirectionResolution::PreserveSource(Dash.Direction);
+    // Native Ram endpoint shares the exact consumed-handler used by its docked carrier.
+    const auto Commit = Player->TryTransferToActor(Ram,Context);
+    TestTrue(TEXT("High transaction starts the stroke"),Commit.bSucceeded && Commit.bConsumed && Ram->IsImpactInProgress());
+    TestFalse(TEXT("Stroke consumes the unique resource"),Player->HasMotionState());
+    Boss->SetActorLocation(FVector(900,800,100));
+    const FVector Before=Carrier->GetActorLocation();Ram->Tick(.1f);
+    TestTrue(TEXT("Physical stroke keeps its committed direction when Boss moves"),(Carrier->GetActorLocation()-Before).GetSafeNormal().Equals(Expected,.001f));
+    TestTrue(TEXT("Output stays locked through flight"),Ram->GetCounterDirection().Equals(Expected,.001f));
+    Ram->CancelStroke();World->DestroyWorld(false);return true;
 }
 #endif

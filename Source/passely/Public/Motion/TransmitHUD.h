@@ -23,6 +23,8 @@ private:
     FString LastObjective;
     FString LastHint;
     float GuidanceChangedSeconds = 0.0f;
+    int32 LastCheckpoint = -1;
+    float CheckpointNoticeUntil = 0;
     float LastRunStartSeconds = -1.0f;
 
     void DrawCrosshair(const FLinearColor& Color);

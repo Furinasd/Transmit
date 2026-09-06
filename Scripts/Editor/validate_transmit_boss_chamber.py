@@ -12,7 +12,7 @@ state=unreal.MotionState(direction=V(0,1,0),direction_policy=unreal.MotionDirect
 assert C.motion.grant_motion_state(state)
 B.set_encounter_active(True)
 start=unreal.GameplayStatics.get_time_seconds(W);stage=0;rows=[];aim=0;rail=[];since=start
-out=pathlib.Path(unreal.Paths.project_saved_dir())/'LTransmitEvidence/Boss';out.mkdir(parents=True,exist_ok=True)
+out=pathlib.Path(unreal.Paths.project_saved_dir())/'LTransmitEvidence/Experience';out.mkdir(parents=True,exist_ok=True)
 def now():return unreal.GameplayStatics.get_time_seconds(W)
 def emit(n,**extra):
  rows.append({'name':n,'seconds':round(now()-start,3),'boss':str(B.get_actor_location()),'carrier':str(C.get_actor_location()),'hits':R.hits,**extra});unreal.log('BOSS_CHAMBER '+json.dumps(rows[-1]))
@@ -55,10 +55,14 @@ def tick(dt):
    preview=I.get_current_preview()
    if ready and aligned and preview.target==C and preview.eligible:
     result=I.request_transfer()
-    if result.succeeded:assert not M.has_motion_state();step('actual Q launches rail '+('miss' if stage==4 else 'hit'))
+    if result.succeeded:
+     assert not M.has_motion_state()
+     if stage==4:
+      B.set_encounter_active(False);B.set_actor_location(V(800,4700,100),False,False)
+     step('actual Q locks Boss position '+('then Boss evades' if stage==4 else 'for hit'))
   elif stage==5:
    if age>1.6:
-    assert R.hits==0;step('off-axis circular strike misses; no free gate damage')
+    assert R.hits==0;B.set_actor_location(V(800,3500,100),False,False);B.set_encounter_active(True);step('committed stroke does not home after Boss evades; no free gate damage')
   elif stage==8:
    if age>1.6:
     assert R.hits==1;step('real circular hit fractures gate once')

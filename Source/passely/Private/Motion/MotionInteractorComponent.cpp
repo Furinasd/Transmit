@@ -1,4 +1,5 @@
 #include "Motion/MotionInteractorComponent.h"
+#include "Motion/TransmitDirectionalCarrierActor.h"
 
 #include "CollisionQueryParams.h"
 #include "Components/ArrowComponent.h"
@@ -480,6 +481,8 @@ UMotionInteractorComponent::FCandidateEvaluation UMotionInteractorComponent::Eva
             Candidate,
             ResolvedState,
             Evaluation.Context);
+        if (const auto* Carrier = Cast<ATransmitDirectionalCarrierActor>(Candidate))
+            Evaluation.ProjectedWorldDirection = Carrier->GetReceiverOutputDirection(Evaluation.ProjectedWorldDirection);
         Evaluation.MagnitudeTier = PlayerMotion->GetMagnitudeTier();
     }
     else
