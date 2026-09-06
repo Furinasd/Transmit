@@ -17,6 +17,7 @@ class ATransmitLevelDirector;
 class USoundAttenuation;
 class UPointLightComponent;
 class UArrowComponent;
+class UCameraComponent;
 
 /** Level-local, read-only presentation. All spatial references are authored actors, never map coordinates. */
 UCLASS(BlueprintType, Blueprintable)
@@ -72,9 +73,10 @@ private:
     {
         FVector Start, End, Axis;
         float Age=0, Duration=0.5f;
-        int32 Kind=0; // 0 causal packet, 1 radial pressure, 2 shrapnel
+        int32 Kind=0; // 0 causal packet, 1 radial pressure, 2 shrapnel, 3 capture contraction
         int32 Layer=0;
         float Strength=1;
+        bool bArrivalShown=false;
     };
     UPROPERTY(VisibleAnywhere, Category="Presentation")
     TObjectPtr<UInstancedStaticMeshComponent> MotionStrokes;
@@ -104,6 +106,15 @@ private:
     bool bLastArmed=false;
     bool bCompleted=false;
     bool bResetting=false;
+    // FOV-only impulse: no view rotation/location changes can enter targeting.
+    TWeakObjectPtr<UCameraComponent> FeedbackCamera;
+    float AppliedFOV=0;
+    float CameraAge=0;
+    float CameraDuration=0;
+    float CameraStrength=0;
+    void KickCamera(float Strength, float Duration);
+    void UpdateCameraFeedback(float DeltaSeconds);
+    void ClearCameraFeedback();
     float Phase=0;
     float DockAge=-1;
     FVector GateImpactAnchor=FVector::ZeroVector;

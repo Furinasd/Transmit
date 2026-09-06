@@ -1,6 +1,7 @@
 #include "Presentation/TransmitPresentationRig.h"
 
 #include "Components/AudioComponent.h"
+#include "Camera/CameraComponent.h"
 #include "Components/ArrowComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Sound/SoundAttenuation.h"
@@ -107,6 +108,7 @@ void ATransmitPresentationRig::BindPlayer()
     auto* Motion=Pawn ? Pawn->FindComponentByClass<UMotionTransferComponent>() : nullptr;
     if (PlayerMotion.Get()==Motion) return;
     if (PlayerMotion.IsValid()) PlayerMotion->OnMotionTransactionNative().Remove(TransactionHandle);
+    ClearCameraFeedback();
     PlayerMotion=Motion;
     if (Motion)
     {
@@ -152,8 +154,47 @@ void ATransmitPresentationRig::OnTransaction(const FMotionTransferResult& R)
     const int32 Layer=bHigh ? 1 : 0;
     AddPulse(0,From,To,R.StateSnapshot.Direction,0.42f,Layer,bHigh ? 1.4f : 1);
     AddPulse(1,bCapture ? From : To,To,R.StateSnapshot.Direction,0.5f,Layer,bHigh ? 1.5f : 0.7f);
+    KickCamera(bHigh ? (bCapture ? -2.4f : 1.6f) : (bCapture ? -0.9f : 1.1f), bHigh ? .38f : .24f);
+    if(bCapture && bHigh)
+        AddPulse(3,From,From,R.StateSnapshot.Direction,.24f,1,1.5f);
     Cue(bCapture ? (bHigh ? 4 : 0) : 1,bCapture ? To : From);
     UE_LOG(LogTemp,Log,TEXT("[TRANSMIT_PRESENTATION] %s %s -> %s high=%d"),bCapture?TEXT("Capture"):TEXT("Transfer"),*R.FromParticipantId.ToString(),*R.ToParticipantId.ToString(),bHigh);
+}
+
+void ATransmitPresentationRig::KickCamera(const float Strength,const float Duration)
+{
+    // A stronger impact wins over a pending ordinary transfer; never stack FOV kicks.
+    if(CameraAge<CameraDuration && FMath::Abs(Strength)<FMath::Abs(CameraStrength)) return;
+    CameraStrength=Strength; CameraDuration=Duration; CameraAge=0;
+}
+
+void ATransmitPresentationRig::ClearCameraFeedback()
+{
+    if(FeedbackCamera.IsValid() && !FMath::IsNearlyZero(AppliedFOV))
+        FeedbackCamera->AddAdditiveOffset(FTransform::Identity,-AppliedFOV);
+    FeedbackCamera.Reset(); AppliedFOV=0; CameraStrength=0; CameraAge=0; CameraDuration=0;
+}
+
+void ATransmitPresentationRig::UpdateCameraFeedback(const float Dt)
+{
+    auto* Pawn=UGameplayStatics::GetPlayerPawn(this,0);
+    UCameraComponent* Camera=nullptr;
+    if(Pawn)
+    {
+        TInlineComponentArray<UCameraComponent*> Cameras(Pawn);
+        for(auto* Candidate:Cameras) if(Candidate->IsActive()) { Camera=Candidate; break; }
+    }
+    if(FeedbackCamera.Get()!=Camera)
+    {
+        // Unwind only this rig's contribution; preserve authored FOV and other offsets.
+        if(FeedbackCamera.IsValid()) FeedbackCamera->AddAdditiveOffset(FTransform::Identity,-AppliedFOV);
+        FeedbackCamera=Camera; AppliedFOV=0;
+    }
+    CameraAge+=Dt;
+    const float T=CameraDuration>0 ? FMath::Clamp(CameraAge/CameraDuration,0.0f,1.0f) : 1;
+    const float Attack=FMath::Clamp(T/.12f,0.0f,1.0f);
+    const float Offset=CameraStrength*Attack*FMath::Square(1-T)*FMath::Clamp(EffectScale,0.0f,1.0f);
+    if(Camera) { Camera->AddAdditiveOffset(FTransform::Identity,Offset-AppliedFOV); AppliedFOV=Offset; }
 }
 
 void ATransmitPresentationRig::AddPulse(int32 Kind,const FVector& Start,const FVector& End,const FVector& Axis,float Duration,int32 Layer,float Strength)
@@ -213,12 +254,18 @@ void ATransmitPresentationRig::DrawDevice(const FVector& C,const FVector& Axis,c
 
 void ATransmitPresentationRig::DrawPulses(const float Dt)
 {
+    TArray<FPulse> Arrivals;
     for (auto& P : Pulses)
     {
         P.Age+=Dt;
         const float T=FMath::Clamp(P.Age/P.Duration,0.0f,1.0f), Fade=1-T;
         if (P.Kind==0)
         {
+            if(T>=2.0f/3.0f && !P.bArrivalShown)
+            {
+                P.bArrivalShown=true;
+                Arrivals.Add({P.End,P.End,P.Axis,0,.2f,1,P.Layer,P.Strength*.32f});
+            }
             // A-to-B packet is ownership travel, deliberately has no directional arrowhead.
             for (int32 I=0;I<9;++I)
             {
@@ -230,6 +277,18 @@ void ATransmitPresentationRig::DrawPulses(const float Dt)
         else if (P.Kind==1)
         {
             DrawRing(P.Start,P.Axis,20+150*FMath::Sqrt(T)*P.Strength,5*Fade*EffectScale,P.Layer);
+        }
+        else if(P.Kind==3)
+        {
+            // Converging braces punctuate the actual captured Dash, never a predicted hit.
+            FVector U,V; P.Axis.FindBestAxisVectors(U,V);
+            const float Radius=FMath::Lerp(150.0f,38.0f,1-FMath::Square(1-T));
+            for(int32 I=0;I<8;++I)
+            {
+                const float Angle=I*PI/4;
+                const FVector Radial=U*FMath::Cos(Angle)+V*FMath::Sin(Angle);
+                DrawLine(P.Start+Radial*Radius,P.Start+Radial*(Radius+38*Fade),7*Fade*EffectScale,1);
+            }
         }
         else
         {
@@ -243,6 +302,7 @@ void ATransmitPresentationRig::DrawPulses(const float Dt)
         }
     }
     Pulses.RemoveAll([](const FPulse& P){return P.Age>=P.Duration;});
+    for(const auto& Arrival:Arrivals) if(Pulses.Num()<16) Pulses.Add(Arrival);
     ActivePulseCount=Pulses.Num();
 }
 
@@ -417,6 +477,7 @@ void ATransmitPresentationRig::OnImpact(const int32 Number)
     AddPulse(1,GateImpactAnchor,GateImpactAnchor,Ram->FixedAxis,Final?1.1f:.65f,1,Final?3:1.7f);
     AddPulse(2,GateImpactAnchor,GateImpactAnchor,-Ram->FixedAxis,Final?1.4f:.75f,1,Final?2:1);
     Cue(Final?6:5,GateImpactAnchor);
+    KickCamera(Final ? 3.0f : 1.8f,Final ? .55f : .3f);
     UE_LOG(LogTemp,Log,TEXT("[TRANSMIT_PRESENTATION] Actual impact %d"),Number);
 }
 
@@ -449,7 +510,9 @@ void ATransmitPresentationRig::Tick(float Dt)
     if(!bResetting)
     {
         Phase+=Dt;
-        DrawOwnership(); DrawEncounter(Dt); DrawPulses(Dt);
+        UpdateCameraFeedback(Dt);
+        // Event feedback takes priority over persistent housings in the bounded pools.
+        DrawPulses(Dt); DrawOwnership(); DrawEncounter(Dt);
     }
     FinishStrokes();
 }
@@ -467,6 +530,7 @@ void ATransmitPresentationRig::FinishStrokes()
 
 void ATransmitPresentationRig::ClearPresentation()
 {
+    ClearCameraFeedback();
     Pulses.Reset(); ActivePulseCount=0; Phase=0; DockAge=-1;
     for(const auto& Audio:PlayingAudio) if(IsValid(Audio)) Audio->Stop();
     PlayingAudio.Reset(); ActiveSoundCount=0; TelegraphAudio.Reset();
