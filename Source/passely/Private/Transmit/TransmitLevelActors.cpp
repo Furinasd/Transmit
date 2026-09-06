@@ -16,6 +16,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Motion/MotionRoomResetController.h"
 #include "Motion/MotionTransferComponent.h"
+#include "Motion/MotionInteractorComponent.h"
 #include "Motion/TransmitCharacter.h"
 #include "TimerManager.h"
 
@@ -277,6 +278,7 @@ void ATransmitRam::LatchArmIfReady()
     bArmed = true;
     CarrierMotion->bCanProvideMotion = false;
     CarrierMotion->bCanReceiveMotion = false;
+    OnArmed.Broadcast();
 
     UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_PLAYABLE] Ram armed from carrier %s"), *GetNameSafe(RouteCarrier));
 }
@@ -339,6 +341,7 @@ void ATransmitRam::ApplyGateImpact()
             Gate->SetActorEnableCollision(false);
         }
     }
+    OnImpact.Broadcast(Hits);
 }
 
 void ATransmitRam::RestoreCarrierPermissions()
@@ -440,6 +443,15 @@ void ATransmitArenaCharger::SetEncounterActive(const bool bActive)
     LastFrameState = StateMachine ? StateMachine->GetState() : EMotionChargerState::Idle;
 }
 
+void ATransmitArenaCharger::RestartEncounter()
+{
+    bResetScheduled = false;
+    StopChargerCycle();
+    Motion->RestoreInitialState(true);
+    ReturnToHome();
+    SetEncounterActive(true);
+}
+
 void ATransmitArenaCharger::HandleArenaComponentHit(
     UPrimitiveComponent*,
     AActor* OtherActor,
@@ -499,7 +511,17 @@ void ATransmitArenaCharger::BindArenaRoomResetController()
 
 void ATransmitArenaCharger::TryArenaResetFromHit()
 {
+    if (!bResetScheduled || !bEncounterActive)
+    {
+        return;
+    }
     bResetScheduled = false;
+    TActorIterator<ATransmitLevelDirector> It(GetWorld());
+    if (It)
+    {
+        It->RequestLocalRetry();
+        return;
+    }
 
     AMotionRoomResetController* Reset = FindArenaResetController();
     if (!Reset)
@@ -559,13 +581,14 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
 
     if (PlayerLocation.Z < FallZ)
     {
-        TryRequestRoomReset();
+        RequestLocalRetry();
         return;
     }
 
     if (ArenaEntryMarker
         && !bEntryTriggered
-        && PlayerLocation.X >= ArenaEntryMarker->GetActorLocation().X)
+        && Ram && Ram->bArmed
+        && FVector::Dist2D(PlayerLocation, ArenaEntryMarker->GetActorLocation()) < 600.0f)
     {
         bEntryTriggered = true;
         EncounterStartSeconds = GetWorld()->GetTimeSeconds();
@@ -575,6 +598,8 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
             Charger->SetEncounterActive(true);
         }
     }
+
+    UpdateFlow();
 
     const bool bGateBroken = Ram && Ram->Hits >= 2;
     if (bGateBroken && Charger && !bGateBrokenHandled)
@@ -589,6 +614,7 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
         && FVector::DistSquared(PlayerLocation, ExitMarker->GetActorLocation()) < ExitDistance * ExitDistance)
     {
         bCompletionShown = true;
+        SetFlowStep(ETransmitFlowStep::Complete);
 
         const float Elapsed = EncounterStartSeconds > 0.0f
             ? GetWorld()->GetTimeSeconds() - EncounterStartSeconds
@@ -609,9 +635,11 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
 
 void ATransmitLevelDirector::HandleDirectorPostRoomReset()
 {
+    Checkpoint = 0;
     bEntryTriggered = false;
     bGateBrokenHandled = false;
     bCompletionShown = false;
+    SetFlowStep(ETransmitFlowStep::TakeMotion);
     EncounterStartSeconds = 0.0f;
 
     APawn* Player = GetPlayerPawn();
@@ -636,6 +664,13 @@ void ATransmitLevelDirector::HandleDirectorPostRoomReset()
 
 void ATransmitLevelDirector::BindDirectorRoomResetController()
 {
+    if (RouteSource)
+    {
+        RouteSourceStart = RouteSource->GetActorTransform();
+        FMotionState SourceState;
+        if (RouteSource->Motion->TryGetMotionState(SourceState)) RouteResourceId = SourceState.SourceId;
+    }
+    if (Ram && Ram->RouteCarrier) RouteCarrierStart = Ram->RouteCarrier->GetActorTransform();
     AMotionRoomResetController* Reset = FindRoomResetController();
     if (Reset)
     {
@@ -658,4 +693,154 @@ AMotionRoomResetController* ATransmitLevelDirector::FindRoomResetController() co
 APawn* ATransmitLevelDirector::GetPlayerPawn() const
 {
     return UGameplayStatics::GetPlayerPawn(this, 0);
+}
+
+void ATransmitLevelDirector::SetFlowStep(const ETransmitFlowStep NewStep)
+{
+    if (FlowStep == NewStep) return;
+    FlowStep = NewStep;
+    StepStartedSeconds = GetWorld()->GetTimeSeconds();
+    OnFlowChanged.Broadcast();
+    UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_FLOW] Step=%d %s"), int32(FlowStep), *GetObjectiveText());
+}
+
+void ATransmitLevelDirector::UpdateFlow()
+{
+    APawn* Player = GetPlayerPawn();
+    if (!Player || bCompletionShown) return;
+    const UMotionTransferComponent* Held = Player->FindComponentByClass<UMotionTransferComponent>();
+    const bool bLoaded = Held && Held->HasMotionState();
+    if (Ram && Ram->bArmed) Checkpoint = 2;
+    else if (RouteEntryMarker && Player->GetActorLocation().X >= RouteEntryMarker->GetActorLocation().X)
+        Checkpoint = FMath::Max(Checkpoint, 1);
+
+    if (Ram && Ram->Hits >= 2) SetFlowStep(ETransmitFlowStep::Exit);
+    else if (Checkpoint == 2)
+    {
+        if (!bEntryTriggered) SetFlowStep(ETransmitFlowStep::ReachArena);
+        else if (bLoaded) SetFlowStep(Ram->Hits == 0 ? ETransmitFlowStep::PowerRam : ETransmitFlowStep::BreakGate);
+        else SetFlowStep(Ram->Hits == 0 ? ETransmitFlowStep::CaptureDash : ETransmitFlowStep::CaptureAgain);
+    }
+    else if (Checkpoint == 1 && Ram && Ram->RouteCarrier)
+    {
+        const auto* Carrier = Ram->RouteCarrier.Get();
+        const bool bAtCatch = CatchMarker && FVector::Dist2D(Carrier->GetActorLocation(), CatchMarker->GetActorLocation()) < 230.0f;
+        FMotionState State;
+        const bool bCarrierLoaded = Carrier->Motion->TryGetMotionState(State);
+        if (bCarrierLoaded && State.Direction.Y > 0.9f) SetFlowStep(ETransmitFlowStep::RerouteCarrier);
+        else if (bAtCatch && bLoaded) SetFlowStep(ETransmitFlowStep::RerouteCarrier);
+        else if (bAtCatch && bCarrierLoaded) SetFlowStep(ETransmitFlowStep::RecaptureCarrier);
+        else if (bCarrierLoaded) SetFlowStep(ETransmitFlowStep::ChaseCarrier);
+        else SetFlowStep(ETransmitFlowStep::SendCarrier);
+    }
+    else if (Bridge && (Bridge->Motion->HasMotionState() || Bridge->GetActorLocation().X > 1500.0f))
+        SetFlowStep(ETransmitFlowStep::CrossBridge);
+    else SetFlowStep(bLoaded ? ETransmitFlowStep::GiveBridge : ETransmitFlowStep::TakeMotion);
+}
+
+bool ATransmitLevelDirector::RequestLocalRetry()
+{
+    APawn* Player = GetPlayerPawn();
+    if (!Player || GetWorld()->GetTimeSeconds() - LastRetrySeconds < 0.5f) return false;
+    auto* PlayerMotion = Player->FindComponentByClass<UMotionTransferComponent>();
+    if (!PlayerMotion || PlayerMotion->IsTransactionInProgress() || PlayerMotion->IsDispatchingNotifications()) return false;
+    if (Checkpoint == 0 || bCompletionShown) return TryRequestRoomReset();
+
+    // This is a level retry, not a new room snapshot: restore only this stage's
+    // original resources. Completed bridge/dock and committed gate impacts remain.
+    TArray<AActor*> RestoreActors;
+    if (Checkpoint == 1)
+    {
+        if (RouteSource) RestoreActors.Add(RouteSource);
+        if (Ram && Ram->RouteCarrier) RestoreActors.Add(Ram->RouteCarrier);
+    }
+    for (AActor* Actor : RestoreActors)
+    {
+        const auto* Motion = Actor->FindComponentByClass<UMotionTransferComponent>();
+        if (Motion && (Motion->IsTransactionInProgress() || Motion->IsDispatchingNotifications())) return false;
+    }
+    // A player may backtrack and store the route resource in an earlier target.
+    // Never recreate that source while another owner outside this retry still holds it.
+    if (Checkpoint == 1 && !RouteResourceId.IsNone())
+    {
+        for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+        {
+            if (*It == Player || RestoreActors.Contains(*It)) continue;
+            const auto* Motion = It->FindComponentByClass<UMotionTransferComponent>();
+            FMotionState State;
+            if (Motion && Motion->TryGetMotionState(State) && State.SourceId == RouteResourceId)
+                return TryRequestRoomReset();
+        }
+    }
+    LastRetrySeconds = GetWorld()->GetTimeSeconds();
+    if (auto* Interactor = Player->FindComponentByClass<UMotionInteractorComponent>()) Interactor->ClearTarget();
+    PlayerMotion->RestoreInitialState(true);
+    for (AActor* Actor : RestoreActors)
+    {
+        Actor->SetActorTransform(Actor == RouteSource ? RouteSourceStart : RouteCarrierStart, false, nullptr, ETeleportType::TeleportPhysics);
+        if (auto* Motion = Actor->FindComponentByClass<UMotionTransferComponent>()) Motion->RestoreInitialState(true);
+    }
+    AActor* SafeMarker = Checkpoint == 1 ? RouteEntryMarker.Get() : ArenaEntryMarker.Get();
+    if (SafeMarker)
+    {
+        Player->SetActorLocation(SafeMarker->GetActorLocation(), false, nullptr, ETeleportType::TeleportPhysics);
+        Player->SetActorRotation(SafeMarker->GetActorRotation());
+        if (Player->GetController()) Player->GetController()->SetControlRotation(SafeMarker->GetActorRotation());
+    }
+    if (auto* Character = Cast<ACharacter>(Player)) Character->GetCharacterMovement()->StopMovementImmediately();
+    if (Checkpoint == 2 && Charger) Charger->RestartEncounter();
+    OnLocalRetry.Broadcast();
+    UpdateFlow();
+    UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_FLOW] LocalRetry checkpoint=%d hits=%d"), Checkpoint, Ram ? Ram->Hits : 0);
+    return true;
+}
+
+FString ATransmitLevelDirector::GetChapterText() const
+{
+    if (bCompletionShown) return TEXT("TRANSMIT / CONNECTION RESTORED");
+    return Checkpoint == 0 ? TEXT("01 / LEARN") : Checkpoint == 1 ? TEXT("02 / ROUTE") : TEXT("03 / WEAPONIZE");
+}
+
+FString ATransmitLevelDirector::GetObjectiveText() const
+{
+    switch (FlowStep)
+    {
+    case ETransmitFlowStep::TakeMotion: return TEXT("Restore the crossing");
+    case ETransmitFlowStep::GiveBridge: return TEXT("Give the motion to the bridge");
+    case ETransmitFlowStep::CrossBridge: return TEXT("Cross the moving bridge");
+    case ETransmitFlowStep::SendCarrier: return TEXT("Send motion through the low passage");
+    case ETransmitFlowStep::ChaseCarrier: return TEXT("Follow your motion to the relay");
+    case ETransmitFlowStep::RecaptureCarrier: return TEXT("Take the motion back");
+    case ETransmitFlowStep::RerouteCarrier: return TEXT("Turn the relay toward the dock");
+    case ETransmitFlowStep::ReachArena: return TEXT("Ram online. Reach the impact chamber");
+    case ETransmitFlowStep::CaptureDash: return TEXT("Intercept a committed charge");
+    case ETransmitFlowStep::PowerRam: return TEXT("Deliver the captured charge to the Ram");
+    case ETransmitFlowStep::CaptureAgain: return TEXT("Gate fractured. Capture one more charge");
+    case ETransmitFlowStep::BreakGate: return TEXT("Break through with the final impact");
+    case ETransmitFlowStep::Exit: return TEXT("Transmission restored. Walk through");
+    case ETransmitFlowStep::Complete: return TEXT("You moved motion. The way is open.");
+    }
+    return FString();
+}
+
+FString ATransmitLevelDirector::GetHintText() const
+{
+    if (GetWorld()->GetTimeSeconds() - LastRetrySeconds < 3.0f) return TEXT("Recovered here. Your completed work is safe.");
+    switch (FlowStep)
+    {
+    case ETransmitFlowStep::TakeMotion: return TEXT("Aim at the moving source. E to capture.");
+    case ETransmitFlowStep::GiveBridge: return TEXT("You are carrying it. Face across the gap; aim at the bridge and press Q.");
+    case ETransmitFlowStep::CrossBridge: return TEXT("The source stopped. The bridge now carries its motion.");
+    case ETransmitFlowStep::SendCarrier: return TEXT("Take the nearby source with E. Face down the passage; Q to send the carrier.");
+    case ETransmitFlowStep::ChaseCarrier: return TEXT("Motion takes the low route. You take the outer gallery.");
+    case ETransmitFlowStep::RecaptureCarrier: return TEXT("Stand at the relay's south side. Aim at the carrier; E to capture again.");
+    case ETransmitFlowStep::RerouteCarrier: return TEXT("Face the dock across the relay. The preview shows the new direction. Q to send.");
+    case ETransmitFlowStep::ReachArena: return TEXT("The delivered carrier armed the Ram. Follow the connected line.");
+    case ETransmitFlowStep::CaptureDash: return TEXT("Wait for the dash, then E. Its direction stays locked.");
+    case ETransmitFlowStep::PowerRam: case ETransmitFlowStep::BreakGate: return TEXT("Carry the charge around cover. Aim at the Ram and press Q.");
+    case ETransmitFlowStep::CaptureAgain: return TEXT("The first hit held. Take another dash to finish the gate.");
+    case ETransmitFlowStep::Exit: return TEXT("The threat is over. Follow the open passage.");
+    case ETransmitFlowStep::Complete: return TEXT("E / Capture    Q / Transfer    R / Play again");
+    }
+    return FString();
 }

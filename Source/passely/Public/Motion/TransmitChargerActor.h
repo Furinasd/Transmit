@@ -52,6 +52,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Motion|Charger")
     void StopChargerCycle();
 
+    UFUNCTION(BlueprintPure, Category = "Motion|Charger")
+    FVector GetDashDirection() const { return DashDirection.GetSafeNormal(); }
+
+    UFUNCTION(BlueprintPure, Category = "Motion|Charger")
+    float GetDashSpeed() const { return DashSpeed; }
+
 protected:
     virtual void BeginPlay() override;
 

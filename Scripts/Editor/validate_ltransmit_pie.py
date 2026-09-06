@@ -11,7 +11,7 @@ class TransmitRun:
   self.p=unreal.GameplayStatics.get_player_pawn(self.w,0);self.pc=unreal.GameplayStatics.get_player_controller(self.w,0)
   self.i=self.p.get_component_by_class(unreal.MotionInteractorComponent)
   self.a={a.get_actor_label():a for a in unreal.GameplayStatics.get_all_actors_of_class(self.w,unreal.Actor)}
-  self.rows=[];self.done=False;self.steps=[];self.index=0;self.since=self.now();self.wall=time.monotonic();self.start=self.now()
+  self.aim_pending=None;self.rows=[];self.done=False;self.steps=[];self.index=0;self.since=self.now();self.wall=time.monotonic();self.start=self.now()
   self.add('reset',lambda:self.a['Flow_Reset'].request_room_reset())
   self.add('capture learn',lambda:self.verb('Learn_Source','capture'))
   self.add('send bridge',lambda:self.verb('Learn_BridgeSlab','transfer'))
@@ -22,12 +22,11 @@ class TransmitRun:
   self.add('send carrier',lambda:self.verb('Route_Carrier','transfer'))
   for pos in [(3100,0),(3100,-920),(3750,-920),(4770,-920),(5150,-700)]:self.walk(pos)
   self.wait('carrier catch',lambda:self.a['Route_Carrier'].is_blocked_by_collision(),12)
-  self.walk((5100,-100))
+  self.walk((5350,-320))
   self.add('recapture carrier',lambda:self.verb('Route_Carrier','capture'))
-  self.walk((5100,-260))
-  self.add('reroute carrier',lambda:self.verb('Route_Carrier','transfer',yaw=30))
+  self.add('reroute carrier',lambda:self.verb('Route_Carrier','transfer',yaw=90))
   self.wait('ram armed',lambda:self.a['Weaponize_Ram'].get_editor_property('armed'),15)
-  for pos in [(5200,-750),(5850,-650),(7000,-500),(7000,700),(7620,700),(7620,1420)]:self.walk(pos)
+  for pos in [(5350,-650),(5850,-650),(7000,-500),(7000,700),(7620,700),(7620,1420)]:self.walk(pos)
   self.wait('capture dash one',lambda:self.capture_dash(),18)
   self.walk((7680,2450))
   self.add('power ram one',lambda:self.verb('Weaponize_Ram','transfer'))
@@ -38,6 +37,7 @@ class TransmitRun:
   self.add('power ram two',lambda:self.verb('Weaponize_Ram','transfer'))
   self.wait('gate hit two',lambda:self.a['Weaponize_Ram'].hits==2,4)
   for pos in [(7930,2530),(8460,2530),(8880,2530)]:self.walk(pos)
+  self.wait('director complete',lambda:self.a['Flow_Director'].is_complete() and not self.a['Weaponize_Gate'].get_actor_enable_collision(),4)
   self.handle=unreal.register_slate_post_tick_callback(self.tick)
   self.emit('begin',note='continuous scripted movement, real targeting, no injected Motion; human acceptance separate')
  def now(self):return unreal.GameplayStatics.get_time_seconds(self.w)
@@ -56,7 +56,13 @@ class TransmitRun:
  def verb(self,label,verb,yaw=None):
   a=self.a[label];eye,_=self.p.get_actor_eyes_view_point();r=unreal.MathLibrary.find_look_at_rotation(eye,a.get_actor_location())
   if yaw is not None:r.yaw=yaw
-  self.pc.set_control_rotation(r);self.i.clear_target();self.i.refresh_target();preview=self.i.get_current_preview()
+  key=(label,verb,yaw)
+  if self.aim_pending is None or self.aim_pending[0]!=key:
+   self.pc.set_control_rotation(r);self.i.clear_target();self.aim_pending=(key,self.now());return None
+  # Gameplay POV updates on a later camera tick than SetControlRotation.
+  if self.now()-self.aim_pending[1]<.3:return None
+  self.i.refresh_target();preview=self.i.get_current_preview()
+  self.aim_pending=None
   if preview.target!=a or not preview.eligible:
    self.emit('target failure',expected=label,selected=preview.target.get_actor_label() if preview.target else None,preview=str(preview),player=str(self.p.get_actor_location()));return False
   result=self.i.request_capture() if verb=='capture' else self.i.request_transfer()
@@ -72,6 +78,7 @@ class TransmitRun:
    n,f,timeout,retry=self.steps[self.index];age=self.now()-self.since
    if age<.25:return
    ok=f()
+   if ok is None and age<=timeout:return
    if ok:
     self.emit('step',name=n,player=str(self.p.get_actor_location()));self.index+=1;self.since=self.now();self.wall=time.monotonic()
    elif not retry or age>timeout or time.monotonic()-self.wall>90:self.finish(False,'step failed: '+n)

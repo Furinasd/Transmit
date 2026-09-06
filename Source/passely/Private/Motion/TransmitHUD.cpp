@@ -1,6 +1,10 @@
 #include "Motion/TransmitHUD.h"
 
 #include "Components/ArrowComponent.h"
+#include "Engine/Canvas.h"
+#include "Engine/Engine.h"
+#include "EngineUtils.h"
+#include "Transmit/TransmitLevelActors.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -67,6 +71,20 @@ void ATransmitHUD::DrawHUD()
     if (!PlayerOwner)
     {
         return;
+    }
+
+    // Level-authored guidance follows committed gameplay state even without a target.
+    TActorIterator<ATransmitLevelDirector> It(GetWorld());
+    if (It)
+    {
+        const float Scale = Canvas ? FMath::Clamp(Canvas->SizeX / 1600.0f, 0.75f, 1.3f) : 1.0f;
+        const float X = 38.0f * Scale;
+        DrawRect(FLinearColor(0.015f, 0.025f, 0.035f, 0.78f), X - 14, 30 * Scale, 760 * Scale, 116 * Scale);
+        DrawText(It->GetChapterText(), FLinearColor(0.2f, 0.85f, 0.9f), X, 40 * Scale, GEngine->GetSmallFont(), Scale);
+        DrawText(It->GetObjectiveText(), FLinearColor::White, X, 67 * Scale, GEngine->GetMediumFont(), Scale);
+        DrawText(It->GetHintText(), FLinearColor(0.78f, 0.85f, 0.87f), X, 106 * Scale, GEngine->GetSmallFont(), Scale);
+        DrawText(TEXT("E  CAPTURE    Q  TRANSFER    BACKSPACE  RETRY AREA    R  RESTART"), FLinearColor(0.75f, 0.8f, 0.83f), X,
+            Canvas->SizeY - 40 * Scale, GEngine->GetSmallFont(), Scale);
     }
 
     const APawn* Pawn = PlayerOwner->GetPawn();

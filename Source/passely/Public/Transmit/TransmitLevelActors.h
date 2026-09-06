@@ -13,6 +13,18 @@ class USceneComponent;
 class AMotionRoomResetController;
 class APawn;
 
+UENUM(BlueprintType)
+enum class ETransmitFlowStep : uint8
+{
+    TakeMotion, GiveBridge, CrossBridge, SendCarrier, ChaseCarrier,
+    RecaptureCarrier, RerouteCarrier, ReachArena, CaptureDash,
+    PowerRam, CaptureAgain, BreakGate, Exit, Complete
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FTransmitLevelEvent);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FTransmitImpactEvent, int32, ImpactNumber);
+
+
 UCLASS(BlueprintType, Blueprintable)
 class PASSELY_API ATransmitBridgeSlab : public ATransmitDirectionalCarrierActor
 {
@@ -32,6 +44,13 @@ class PASSELY_API ATransmitRam : public ATransmitMotionEndpointActor
 
 public:
     ATransmitRam();
+
+    UPROPERTY(BlueprintAssignable, Category = "Transmit|Events")
+    FTransmitLevelEvent OnArmed;
+
+    UPROPERTY(BlueprintAssignable, Category = "Transmit|Events")
+    FTransmitImpactEvent OnImpact;
+
 
     virtual void Tick(float DeltaSeconds) override;
     virtual FMotionCompatibilityResult CanReceiveMotion_Implementation(
@@ -117,6 +136,8 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Transmit|Arena")
     void SetEncounterActive(bool bActive);
 
+    void RestartEncounter();
+
 protected:
     virtual void BeginPlay() override;
 
@@ -151,6 +172,38 @@ class PASSELY_API ATransmitLevelDirector : public AActor
 public:
     ATransmitLevelDirector();
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transmit|Flow")
+    TObjectPtr<ATransmitBridgeSlab> Bridge;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transmit|Flow")
+    TObjectPtr<ATransmitMotionEndpointActor> RouteSource;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transmit|Flow")
+    TObjectPtr<AActor> RouteEntryMarker;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transmit|Flow")
+    TObjectPtr<AActor> CatchMarker;
+
+    UPROPERTY(BlueprintAssignable, Category = "Transmit|Events")
+    FTransmitLevelEvent OnFlowChanged;
+
+    UPROPERTY(BlueprintAssignable, Category = "Transmit|Events")
+    FTransmitLevelEvent OnLocalRetry;
+
+    UFUNCTION(BlueprintPure, Category = "Transmit|Flow")
+    ETransmitFlowStep GetFlowStep() const { return FlowStep; }
+
+    UFUNCTION(BlueprintPure, Category = "Transmit|Flow")
+    bool IsComplete() const { return bCompletionShown; }
+
+    UFUNCTION(BlueprintCallable, Category = "Transmit|Flow")
+    bool RequestLocalRetry();
+
+    FString GetObjectiveText() const;
+    FString GetHintText() const;
+    FString GetChapterText() const;
+
+
     virtual void Tick(float DeltaSeconds) override;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transmit|Director")
@@ -178,6 +231,13 @@ private:
     UPROPERTY(VisibleAnywhere, Category = "Transmit|Director")
     TObjectPtr<USceneComponent> SceneRoot;
 
+    ETransmitFlowStep FlowStep = ETransmitFlowStep::TakeMotion;
+    int32 Checkpoint = 0;
+    float StepStartedSeconds = 0.0f;
+    float LastRetrySeconds = -10.0f;
+    FName RouteResourceId = NAME_None;
+    FTransform RouteSourceStart = FTransform::Identity;
+    FTransform RouteCarrierStart = FTransform::Identity;
     bool bEntryTriggered = false;
     bool bGateBrokenHandled = false;
     bool bCompletionShown = false;
@@ -186,6 +246,8 @@ private:
     UFUNCTION()
     void HandleDirectorPostRoomReset();
 
+    void UpdateFlow();
+    void SetFlowStep(ETransmitFlowStep NewStep);
     void BindDirectorRoomResetController();
     bool TryRequestRoomReset();
     AMotionRoomResetController* FindRoomResetController() const;
