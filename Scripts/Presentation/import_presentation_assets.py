@@ -71,6 +71,8 @@ def _create_material(name, recipe, report):
         raise RuntimeError("Asset creation failed: " + path)
     report["created"].append(path)
     _log("CREATED: " + path)
+    if name in ("M_Motion", "M_Impact", "M_Inlay", "M_Graphite"):
+        material.set_editor_property("used_with_instanced_static_meshes", True)
     rgb, roughness, metallic, emissive = recipe
     color = _expression(material, unreal.MaterialExpressionConstant3Vector, -480, 0)
     color.set_editor_property("constant", unreal.LinearColor(*rgb, 1.0))
