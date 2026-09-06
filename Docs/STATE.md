@@ -2,9 +2,39 @@
 
 > Operational snapshot, not design authority. Gameplay rules live in `DESIGN_CONTRACT.md`; architecture lives in `ARCHITECTURE.md`. Historical evidence remains in `Docs/dev/` and Git.
 
-Last inspected: 2026-09-07, integrated presentation and wayfinding checkpoint awaiting human timing/experience acceptance.
+Last inspected: 2026-09-07, vertical maintenance route and compact guidance; human timing/experience acceptance remains open.
 
-## Current wayfinding checkpoint
+## Current vertical layout checkpoint
+
+- User-authorized major layout iteration on `Jason/L_Transmit_v01`, currently an
+  uncommitted working-tree change. Source of world context: STANDARD Notion 04.
+- A 3m arrival platform, 4.8m inspection loop and 6m service/reuse deck connect by
+  traversable ramps. All 408 baseline actors remain; map total is 571. Core L2,
+  Ram, Charger and gate transforms are unchanged. Twelve large tutorial boards
+  become maintenance plaques; giant host-hardware silhouettes establish scale.
+- Compact work-order HUD, actual loaded status, target-dependent E/Q prompts,
+  12-second contextual lessons and held-Tab help. Same-stage R restores the lesson.
+  World text retains the current demo's English language.
+- Only changed binary: `Content/Transmit/Maps/L_Transmit.umap`. No Blueprint,
+  material asset, project/plugin configuration or global lighting edits.
+- Final Mac Editor build passed; 25/25 Transmit automation passed without test
+  warnings/errors. Saved-map Map Check: 0 errors / 0 warnings. Clean possessed PIE
+  completed in 173.957 game seconds; combined recovery completed in 205.841 seconds,
+  covering Route/service falls, hit-one collision, open-gate retry and repeated R.
+  Five initial resources retain one owner each. Final HUD fade/restart and first
+  capture/transfer were independently observed after the last code build.
+- Current Mac candidate: `Saved/LTransmitCandidate/20260907-vertical-Mac/Transmit.app`.
+  Final Build/Cook/Stage passed in 53.02s; bundle signature verification passed.
+  The standalone app independently rendered the new map/HUD with Metal SM6;
+  native R restored the raised starting view and lesson. Full standalone traversal
+  remains a human check; full automated traversal evidence is PIE.
+- Evidence and remaining gates: `dev/20260907-ltransmit-vertical.md` and
+  `Saved/LTransmitEvidence/Vertical/`. Human gates: first-play understanding/timing,
+  elevated-route feel, preferred-resolution text, held-Tab help and aesthetics.
+  Full Notion voice/narrative staging and ordinary trial-impact behavior are not
+  part of this delivered layout/UI scope. No Windows compatibility claim.
+
+## Previous wayfinding checkpoint
 
 - Integration line: `Jason/L_Transmit_v01`, combining saved pacing `003d497` with `Jason/presentation-juice` at `5d6b4d9`. The expanded map is retained; the other branch's geometry/backdrop edits are replayed through Editor.
 - Added continuous neutral route marks, four safe bridge operating positions, a reverse-facing reclaim position and 11 low transit guards. Revised eight signs, moved seven text-only signs away from the walking/camera line and added 12 non-colliding sign backplates. Fixed practice/return/reuse HUD stage instructions.

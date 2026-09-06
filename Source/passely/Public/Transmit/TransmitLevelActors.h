@@ -204,6 +204,7 @@ public:
     FString GetObjectiveText() const;
     FString GetHintText() const;
     FString GetChapterText() const;
+    float GetRunStartSeconds() const { return RunStartSeconds; }
 
 
     virtual void Tick(float DeltaSeconds) override;

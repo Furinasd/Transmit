@@ -17,8 +17,8 @@ class PacingRecoveryRun(FlowRecoveryRun):
     BRIDGE_STARTS = {
         'Pacing_LearnBridgeA': (-7520, 0, 25),
         'Pacing_LearnBridgeB': (-5200, 880, 25),
-        'Pacing_RouteBridgeA': (5480, -6200, 25),
-        'Pacing_RouteBridgeB': (7900, -3520, 25),
+        'Pacing_RouteBridgeA': (5480, -6200, 625),
+        'Pacing_RouteBridgeB': (7900, -3520, 625),
     }
     SOURCE_NAMES = {
         'Learn_Source', 'Route_Source', 'Pacing_LearnSourceA',
@@ -98,7 +98,7 @@ class PacingRecoveryRun(FlowRecoveryRun):
         for name in ['Pacing_RouteBridgeA', 'Pacing_RouteBridgeB']:
             assert self.near(self.a[name], self.BRIDGE_STARTS[name]), name
             assert not self.a[name].motion.has_motion_state(), name
-        assert self.near(self.a['Pacing_RouteSource'], (5100, -5850, 120))
+        assert self.near(self.a['Pacing_RouteSource'], (5100, -5850, 720))
         assert self.a['Pacing_RouteSource'].motion.has_motion_state()
         owners = self.owners()
         expected = {

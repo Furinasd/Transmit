@@ -625,14 +625,7 @@ void ATransmitLevelDirector::Tick(const float DeltaSeconds)
         UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_PLAYABLE] L_Transmit gate broken: elapsed=%.1fs"), Elapsed);
         UE_LOG(LogTemp, Log, TEXT("[TRANSMIT_PLAYABLE] Full run including local retries: %.1fs"), CompletedRunSeconds);
 
-        if (GEngine)
-        {
-            GEngine->AddOnScreenDebugMessage(
-                -1,
-                6.0f,
-                FColor::Green,
-                TEXT("TRANSMITTED"));
-        }
+
     }
 }
 
@@ -878,54 +871,56 @@ bool ATransmitLevelDirector::GetPacingTutorial(FString& Chapter, FString& Object
     const bool bLoaded = Held && Held->HasMotionState();
     if (Position.X < -2500.0f && SlabFor(TEXT("Transmit.Pacing.LearnA")))
     {
-        Chapter = TEXT("01 / LEARN - PRACTICE");
+        Chapter = TEXT("01 / BOARD ASSEMBLY");
         if (Position.Y > 2600.0f)
         {
-            Objective = TEXT("Follow the passage to the final practice crossing");
-            Hint = TEXT("Follow the white route marks: east at the landing, south at the next corner. E can recover a slab's motion if you need to correct its direction.");
+            Objective = TEXT("Climb the inspection loop");
+            Hint = TEXT("Follow the white marks up the ramp. Look back at the crossings you repaired, then descend to the next board.");
         }
         else if (Position.X < -6100.0f)
         {
             const auto* Slab = SlabFor(TEXT("Transmit.Pacing.LearnA"));
-            Objective = Slab->Motion->HasMotionState() ? TEXT("Follow the bridge across")
+            Objective = Slab->Motion->HasMotionState() ? (Slab->IsMovementActive() ? TEXT("Bridge moving. Wait on the bank") : TEXT("Follow the bridge across"))
                 : bLoaded ? TEXT("Give the motion to the first bridge") : TEXT("Take motion from the moving source");
-            Hint = TEXT("E takes motion; the source stops. Stay on the bank, face across the gap and Q gives it to the bridge. Wait for it to stop before crossing. BACKSPACE retries; R restarts all.");
+            Hint = bLoaded ? TEXT("Stay on the bank. Face across the gap and Q to transfer. The preview arrow shows the direction.")
+                : Slab->Motion->HasMotionState() ? TEXT("The source stopped; the bridge carries its motion. Cross once it stops.")
+                : TEXT("Xuanwu motion: E captures and stops one object. Q transfers and moves another. Carry one motion at a time.");
         }
         else
         {
             const auto* Slab = SlabFor(TEXT("Transmit.Pacing.LearnB"));
-            Objective = Slab && Slab->Motion->HasMotionState() ? TEXT("Cross the northbound bridge, then follow the passage")
-                : TEXT("Turn the next crossing north");
+            Objective = Slab && Slab->Motion->HasMotionState() ? (Slab->IsMovementActive() ? TEXT("Bridge moving. Wait on the bank") : TEXT("Cross to the inspection loop"))
+                : TEXT("Connect the northbound bridge");
             Hint = Slab && Slab->Motion->HasMotionState()
-                ? TEXT("Wait for the slab to stop, then cross north. At the far landing, the white route turns right toward the next crossing.")
-                : TEXT("Take the nearby source. Use the white operating mark SOUTH of the slab. Face north and check the arrow before Q; stay on the bank while it moves.");
+                ? TEXT("Cross after the bridge stops. Turn right at the landing and climb the inspection loop.")
+                : TEXT("E captures the nearby source. Stand south of the bridge, face north, then Q. Check the direction arrow.");
         }
         return true;
     }
     if (Ram && Ram->bArmed && !bEntryTriggered && SlabFor(TEXT("Transmit.Pacing.RouteA")))
     {
-        Chapter = TEXT("02 / ROUTE - REUSE");
+        Chapter = TEXT("02 / UPPER SERVICE DECK");
         const auto* First = SlabFor(TEXT("Transmit.Pacing.RouteA"));
         const auto* Second = SlabFor(TEXT("Transmit.Pacing.RouteB"));
         if (Second && Second->Motion->HasMotionState())
         {
-            Objective = TEXT("Cross north and approach the impact chamber");
-            Hint = TEXT("You reused one motion for two crossings. Follow the north passage. The Boss telegraphs first; capture only its committed dash.");
+            Objective = Second->IsMovementActive() ? TEXT("Bridge moving. Wait on the bank") : TEXT("Descend to the upper interface");
+            Hint = TEXT("One motion restored two crossings. Follow the ramp down to the interface checkpoint.");
         }
         else if (Position.X < 6900.0f)
         {
-            Objective = First->Motion->HasMotionState() ? TEXT("Cross the service bridge")
-                : bLoaded ? TEXT("Give the carried motion from the west bank") : TEXT("Follow the south gallery and restore its crossing");
+            Objective = First->Motion->HasMotionState() ? (First->IsMovementActive() ? TEXT("Bridge moving. Wait on the bank") : TEXT("Cross the service bridge"))
+                : bLoaded ? TEXT("Give the carried motion from the west bank") : TEXT("Climb to the service deck");
             Hint = First->Motion->HasMotionState()
-                ? TEXT("Wait for the slab to stop, cross east, then E to take its motion back from the far bank. The next bridge has no source.")
-                : bLoaded ? TEXT("Stand on the white mark WEST of the slab, facing east. Q sends it across. Stay on the bank while it moves.")
-                : TEXT("The Ram is armed. Follow the white marks south, then turn right to the source and the west-bank operating mark.");
+                ? TEXT("Wait for the bridge to stop. Cross east, then look back: E recovers the same motion.")
+                : bLoaded ? TEXT("Stay on the west bank. Face east and Q to send the bridge; cross only after it stops.")
+                : TEXT("Follow the white marks up the south ramp. Both crossings on the upper deck share one motion.");
         }
         else
         {
-            Objective = bLoaded ? TEXT("Carry the recovered motion to the northbound bridge") : TEXT("Take the motion back from the bridge you crossed");
-            Hint = bLoaded ? TEXT("Walk north to the next bridge. Stand south of it, face north and Q. The preview shows the new direction.")
-                : TEXT("From the far bank, aim back at the service bridge and E. Its motion can open another route; you do not need another source.");
+            Objective = bLoaded ? TEXT("Restore the second service crossing") : TEXT("Look back. Recover your motion");
+            Hint = bLoaded ? TEXT("Carry it north. Stay on the bank, face along the second bridge and Q.")
+                : TEXT("Aim back at the bridge you crossed and E. The next crossing has no source.");
         }
         return true;
     }
@@ -941,7 +936,7 @@ FString ATransmitLevelDirector::GetChapterText() const
         const int32 Seconds = FMath::FloorToInt(CompletedRunSeconds);
         return FString::Printf(TEXT("TRANSMIT / CONNECTION RESTORED / %02d:%02d"), Seconds / 60, Seconds % 60);
     }
-    return Checkpoint == 0 ? TEXT("01 / LEARN") : Checkpoint == 1 ? TEXT("02 / ROUTE") : TEXT("03 / WEAPONIZE");
+    return Checkpoint == 0 ? TEXT("01 / BOARD ASSEMBLY") : Checkpoint == 1 ? TEXT("02 / BUS RELAY") : TEXT("03 / UPPER INTERFACE");
 }
 
 FString ATransmitLevelDirector::GetObjectiveText() const
@@ -956,12 +951,12 @@ FString ATransmitLevelDirector::GetObjectiveText() const
         return Bridge && Bridge->GetActorLocation().X > 1500.0f
             ? TEXT("Cross the bridge") : TEXT("Move the bridge into the gap");
     case ETransmitFlowStep::SendCarrier: return TEXT("Send motion through the low passage");
-    case ETransmitFlowStep::ChaseCarrier: return TEXT("Follow your motion to the relay");
+    case ETransmitFlowStep::ChaseCarrier: return TEXT("Follow C-01 through the inspection gallery");
     case ETransmitFlowStep::RecaptureCarrier: return TEXT("Take the motion back");
     case ETransmitFlowStep::RerouteCarrier:
         return Ram && Ram->RouteCarrier && Ram->RouteCarrier->Motion->HasMotionState()
             ? TEXT("Deliver the relay to the dock") : TEXT("Turn the relay toward the dock");
-    case ETransmitFlowStep::ReachArena: return TEXT("Ram online. Reach the impact chamber");
+    case ETransmitFlowStep::ReachArena: return TEXT("Reach the interface checkpoint");
     case ETransmitFlowStep::CaptureDash: return TEXT("Intercept a committed charge");
     case ETransmitFlowStep::PowerRam: return TEXT("Deliver the captured charge to the Ram");
     case ETransmitFlowStep::CaptureAgain: return TEXT("Gate fractured. Capture one more charge");
@@ -969,8 +964,8 @@ FString ATransmitLevelDirector::GetObjectiveText() const
     case ETransmitFlowStep::ObserveImpact:
         return Ram && Ram->Hits >= 2 ? TEXT("Gate released")
             : Ram && Ram->Hits == 1 ? TEXT("Gate fractured") : TEXT("Ram charged. Watch the gate");
-    case ETransmitFlowStep::Exit: return TEXT("Transmission restored. Walk through");
-    case ETransmitFlowStep::Complete: return TEXT("You moved motion. The way is open.");
+    case ETransmitFlowStep::Exit: return TEXT("Connection restored. Proceed through");
+    case ETransmitFlowStep::Complete: return TEXT("Work order complete");
     }
     return FString();
 }
@@ -1004,8 +999,8 @@ FString ATransmitLevelDirector::GetHintText() const
     case ETransmitFlowStep::ObserveImpact:
         return TEXT("The captured charge is driving the Ram. Follow the impact along its rail.");
     case ETransmitFlowStep::CaptureAgain: return TEXT("The first hit held. Take another dash to finish the gate.");
-    case ETransmitFlowStep::Exit: return TEXT("The threat is over. Follow the open passage.");
-    case ETransmitFlowStep::Complete: return TEXT("E / Capture    Q / Transfer    R / Play again");
+    case ETransmitFlowStep::Exit: return TEXT("Inspection complete. The upper interface is open.");
+    case ETransmitFlowStep::Complete: return TEXT("Connection restored. Operator: temporary. R starts a new work order.");
     }
     return FString();
 }

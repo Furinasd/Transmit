@@ -212,3 +212,28 @@ Design exploration and evidence remain in Notion. Once a rule is accepted, updat
 - [07 — Production Workflow & Repo Architecture](https://app.notion.com/p/3ca6dbf617ac81dcb66be87ef08b4ce0)
 - [08 — Final Production Plan | v0.4 Delta → L_Transmit → Presentation](https://app.notion.com/p/3ce6dbf617ac81d5b1aff7871934ffb7)
 - [Goal 09 — Final Design Lock → L_Transmit Production → Presentation](https://app.notion.com/p/3cf6dbf617ac811e9ed1e798f1931545)
+
+## Authorized layout / guidance iteration — 2026-09-07
+
+The user explicitly authorizes major changes to the existing layout, including elevation,
+and a modern minimal guidance system, with world context from
+[STANDARD 04｜任务、世界与演出](https://app.notion.com/p/a1d6dbf617ac83f091088183c88004ba).
+This iteration retains every playable bridge application, ordinary resource reuse,
+C-01 chase/re-capture/dock, and two direction-locked High impacts. The authored heights
+are 3m arrival overlook, 4.8m inspection loop and 6m service deck. Ramps connect the
+existing route. No new Motion policy, L4/L5, branding compatibility rule or HP system.
+
+The world is a giant electronic host; the player is a temporary maintenance worker
+restoring a connection to an upper interface. Xuanwu is the in-world name for Motion,
+not a new resource. UI completion means this work order is complete. Facility plaques,
+component silhouettes and interface identity carry the scoped world reference.
+Full voiced narration, the self-appointed inspector reveal, physical ordinary trial
+impact and true Ram docking travel in the Notion proposal are not claimed by this
+layout/UI iteration. Existing Ram behavior remains relay-driven arming and two High
+strokes, as recorded in ARCHITECTURE.md.
+
+The 2026-09-05 tables above contain historical implementation statuses. In particular,
+L_Transmit, Directional Carrier and PreserveSource are now implemented; the current
+architecture and STATE.md record their evidence. This amendment explicitly identifies
+that discrepancy without reinterpreting the frozen rules. New layout acceptance still
+requires saved-map traversal/recovery and human readability/feel review.

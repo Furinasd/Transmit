@@ -277,3 +277,21 @@ The formal content line is `Jason/L_Transmit_v01` (2026-09-06). Older implementa
 `Scripts/Editor/extend_ltransmit_pacing.py` adds two introductory bridges and a post-dock passage containing two bridges that share one recoverable ordinary Motion. All use existing endpoint/slab capabilities. The original Learn, Route and Boss actors remain; the authoring script protects their transforms and only opens two baseline walls and relocates PlayerStart.
 
 The director observes concrete `Transmit.Pacing.LearnA/LearnB/RouteA/RouteB` tags for tutorial text. Actors tagged `Transmit.Pacing.Transition` form the narrow pre-arena retry group: their initial transforms and existing Motion snapshots are restored while the main dock and Ram stay complete. An externally held practice resource escalates to the existing full Reset. Entering the arena restores the original arena-retry behavior. The director never writes Motion state directly. Full-run timing resets on R, includes local retries and freezes for the completion heading.
+
+### Vertical layout and compact work-order guidance (2026-09-07)
+
+`author_ltransmit_vertical.py` patches only the existing formal map. It creates a
+3m arrival overlook and 4.8m return loop, raises the existing two-bridge reuse
+passage and its single source by 6m, and connects the banks with ordinary swept
+CharacterMovement ramps. The moving actors retain their existing world-space
+movement and reset snapshots. Original L2 and Boss transforms remain unchanged.
+All baseline actors are retained; the authoring evidence records exact changes.
+
+`ATransmitHUD` presents a compact work order, actual carry status, and contextual
+E/Q affordances from the existing eligibility preview. The director still chooses
+objectives from real participant state. Detailed guidance displays for 12 seconds
+after a change and remains available while Tab is held. A new run start resets
+that presentation timer, including R while the objective is unchanged. No input
+mapping, reflected authoring property or gameplay permission is introduced.
+Scene plaques use the existing material palette and simple host-hardware geometry;
+world naming does not change Motion state, magnitude or compatibility.

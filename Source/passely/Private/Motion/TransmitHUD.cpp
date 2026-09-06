@@ -3,6 +3,7 @@
 #include "Components/ArrowComponent.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
+#include "InputCoreTypes.h"
 #include "EngineUtils.h"
 #include "Transmit/TransmitLevelActors.h"
 #include "Components/StaticMeshComponent.h"
@@ -73,57 +74,77 @@ void ATransmitHUD::DrawHUD()
         return;
     }
 
-    // Level-authored guidance follows committed gameplay state even without a target.
+    if (!Canvas || !GEngine) return;
+    const float Scale = FMath::Clamp(FMath::Min(Canvas->SizeX / 1440.0f, Canvas->SizeY / 900.0f), 0.65f, 1.5f);
+    const float Margin = 32.0f * Scale;
+    const bool bHelp = PlayerOwner->IsInputKeyDown(EKeys::Tab);
+    const auto Label = [this, Scale](const FString& Text, float X, float Y, float Size, FLinearColor Color)
+    {
+        DrawText(Text, Color, X, Y, GEngine->GetMediumFont(), Size * Scale);
+    };
+    const auto Wrapped = [this, Scale](const FString& Text, float Width, float Size)
+    {
+        TArray<FString> Words, Lines;
+        Text.ParseIntoArrayWS(Words);
+        FString Line;
+        for (const FString& Word : Words)
+        {
+            const FString Next = Line.IsEmpty() ? Word : Line + TEXT(" ") + Word;
+            float W = 0, H = 0;
+            GetTextSize(Next, W, H, GEngine->GetMediumFont(), Size * Scale);
+            if (!Line.IsEmpty() && W > Width) { Lines.Add(Line); Line = Word; }
+            else Line = Next;
+        }
+        if (!Line.IsEmpty()) Lines.Add(Line);
+        return Lines;
+    };
+
+    // Presentation only: the director supplies facts, never a second progress model.
     TActorIterator<ATransmitLevelDirector> It(GetWorld());
     if (It)
     {
-        const float Scale = Canvas ? FMath::Clamp(Canvas->SizeX / 1600.0f, 0.75f, 1.3f) : 1.0f;
-        const float X = 38.0f * Scale;
-        const float TextWidth = 660.0f * Scale;
-        const auto Wrap = [this, TextWidth](const FString& Text, UFont* Font, float TextScale)
+        const FString Objective = It->GetObjectiveText();
+        const FString Hint = It->GetHintText();
+        const float Now = GetWorld()->GetTimeSeconds();
+        if (Objective != LastObjective || Hint != LastHint || It->GetRunStartSeconds() != LastRunStartSeconds)
         {
-            TArray<FString> Words;
-            Text.ParseIntoArrayWS(Words);
-            TArray<FString> Lines;
-            FString Line;
-            for (const FString& Word : Words)
-            {
-                const FString Candidate = Line.IsEmpty() ? Word : Line + TEXT(" ") + Word;
-                float W = 0, H = 0;
-                GetTextSize(Candidate, W, H, Font, TextScale);
-                if (!Line.IsEmpty() && W > TextWidth)
-                {
-                    Lines.Add(Line);
-                    Line = Word;
-                }
-                else
-                {
-                    Line = Candidate;
-                }
-            }
-            if (!Line.IsEmpty()) { Lines.Add(Line); }
-            return Lines;
-        };
-        const auto Objectives = Wrap(It->GetObjectiveText(), GEngine->GetMediumFont(), 1.8f * Scale);
-        const auto Hints = Wrap(It->GetHintText(), GEngine->GetSmallFont(), 1.35f * Scale);
-        const float HintY = (77.0f + 29.0f * Objectives.Num()) * Scale;
-        const float PanelBottom = HintY + (23.0f * Hints.Num() + 17.0f) * Scale;
-        DrawRect(FLinearColor(0.015f, 0.025f, 0.035f, 0.78f), X - 14 * Scale, 30 * Scale,
-            TextWidth + 28 * Scale, PanelBottom - 30 * Scale);
-        DrawText(It->GetChapterText(), FLinearColor(0.2f, 0.85f, 0.9f), X, 42 * Scale,
-            GEngine->GetSmallFont(), 1.25f * Scale);
-        for (int32 Index = 0; Index < Objectives.Num(); ++Index)
-        {
-            DrawText(Objectives[Index], FLinearColor::White, X, (73 + 29 * Index) * Scale,
-                GEngine->GetMediumFont(), 1.8f * Scale);
+            LastRunStartSeconds = It->GetRunStartSeconds();
+            LastObjective = Objective;
+            LastHint = Hint;
+            GuidanceChangedSeconds = Now;
         }
-        for (int32 Index = 0; Index < Hints.Num(); ++Index)
+        const float Width = 440 * Scale;
+        const auto Lines = Wrapped(Objective, Width - 40 * Scale, 1.9f);
+        const float Height = (78 + 25 * Lines.Num()) * Scale;
+        DrawRect(FLinearColor(.025f, .038f, .048f, .82f), Margin, Margin, Width, Height);
+        DrawRect(FLinearColor(.72f, .81f, .82f, .85f), Margin, Margin, 2 * Scale, Height);
+        Label(TEXT("TRANSMIT   /   MAINTENANCE"), Margin + 20*Scale, Margin + 14*Scale, .95f, NeutralColor);
+        Label(It->GetChapterText(), Margin + 20*Scale, Margin + 38*Scale, 1.1f, FLinearColor(.7f,.8f,.82f));
+        for (int32 Index = 0; Index < Lines.Num(); ++Index)
+            Label(Lines[Index], Margin + 20*Scale, Margin + (65+25*Index)*Scale, 1.9f, FLinearColor::White);
+
+        // A short contextual lesson appears on a state change; hold Tab to recall it.
+        // Moving/blocked/loaded distinctions are actual actor state, not tutorial timers.
+        const float HintAlpha = bHelp || It->IsComplete() ? 1.0f
+            : FMath::Clamp((12.0f - (Now - GuidanceChangedSeconds)) / 1.0f, 0.0f, 1.0f);
+        if (HintAlpha > 0)
         {
-            DrawText(Hints[Index], FLinearColor(0.78f, 0.85f, 0.87f), X, HintY + 23 * Index * Scale,
-                GEngine->GetSmallFont(), 1.35f * Scale);
+            const float HintWidth = FMath::Min(700 * Scale, Canvas->SizeX - 2*Margin);
+            const auto Hints = Wrapped(Hint, HintWidth - 40*Scale, 1.35f);
+            const float HintHeight = (24 + 22*Hints.Num())*Scale;
+            const float X = (Canvas->SizeX - HintWidth)*.5f;
+            const float Y = Canvas->SizeY - 92*Scale - HintHeight;
+            DrawRect(FLinearColor(.025f,.038f,.048f,.86f*HintAlpha), X, Y, HintWidth, HintHeight);
+            for (int32 Index = 0; Index < Hints.Num(); ++Index)
+                Label(Hints[Index], X+20*Scale, Y+(12+22*Index)*Scale, 1.35f, FLinearColor(.9f,.94f,.95f,HintAlpha));
         }
-        DrawText(TEXT("E  CAPTURE    Q  TRANSFER    BACKSPACE  RETRY AREA    R  RESTART"), FLinearColor(0.75f, 0.8f, 0.83f), X,
-            Canvas->SizeY - 40 * Scale, GEngine->GetSmallFont(), 1.15f * Scale);
+        Label(TEXT("TAB  Help"), Margin, Canvas->SizeY-38*Scale, 1.0f, NeutralColor);
+        const FString Controls = bHelp
+            ? TEXT("WASD  Move    MOUSE  Aim    SPACE  Jump    E  Capture    Q  Transfer    BACKSPACE  Retry area    R  Restart")
+            : TEXT("BACKSPACE  Retry area     R  Restart");
+        float W=0,H=0;
+        GetTextSize(Controls,W,H,GEngine->GetMediumFont(),.95f*Scale);
+        Label(Controls, Canvas->SizeX-Margin-W, Canvas->SizeY-38*Scale, .95f, NeutralColor);
     }
 
     const APawn* Pawn = PlayerOwner->GetPawn();
@@ -136,6 +157,14 @@ void ATransmitHUD::DrawHUD()
         DrawCrosshair(NeutralColor);
         return;
     }
+
+    const bool bLoaded = Motion->HasMotionState();
+    const FString CarryLabel = bLoaded ? TEXT("MOTION  /  LOADED") : TEXT("TOOL  /  EMPTY");
+    const FLinearColor CarryColor = bLoaded ? HudTransferReadyColor : NeutralColor;
+    const float StateX = Canvas->SizeX - Margin - 194*Scale;
+    DrawRect(FLinearColor(.025f,.038f,.048f,.8f),StateX,Margin,194*Scale,36*Scale);
+    DrawRect(CarryColor,StateX+12*Scale,Margin+15*Scale,5*Scale,5*Scale);
+    Label(CarryLabel,StateX+28*Scale,Margin+10*Scale,1.0f,CarryColor);
 
     const FMotionInteractionPreview Preview = Interactor->GetCurrentPreview();
     if (!IsValid(Preview.Target)
@@ -158,6 +187,15 @@ void ATransmitHUD::DrawHUD()
     }
     DrawCrosshair(Color);
     DrawTargetBrackets(Preview.Target, Color);
+    if (Preview.bEligible)
+    {
+        const FString Action = bLoaded ? TEXT("Q   TRANSFER") : TEXT("E   CAPTURE");
+        float W=0,H=0;
+        GetTextSize(Action,W,H,GEngine->GetMediumFont(),1.15f*Scale);
+        const float X=(Canvas->SizeX-W)*.5f, Y=Canvas->SizeY*.5f+42*Scale;
+        DrawRect(FLinearColor(.025f,.038f,.048f,.82f),X-12*Scale,Y-7*Scale,W+24*Scale,32*Scale);
+        Label(Action,X,Y,1.15f,Color);
+    }
     if (!Preview.bEligible)
     {
         FString Reason;
