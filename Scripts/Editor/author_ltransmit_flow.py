@@ -24,7 +24,7 @@ def box(name,loc,size,mat='Chalk',yaw=0,collision=True):
   a=E.spawn_actor_from_class(unreal.StaticMeshActor,V(*loc));a.set_actor_label(name)
   a.set_editor_property('tags',[unreal.Name('Transmit.Flow')]);a.set_folder_path('Flow_Architecture');actors[name]=a
  assert isinstance(a,unreal.StaticMeshActor)
- a.set_actor_location(V(*loc),False,False);a.set_actor_rotation(unreal.Rotator(0,yaw,0),False)
+ a.set_actor_location(V(*loc),False,False);a.set_actor_rotation(unreal.Rotator(pitch=0,yaw=yaw,roll=0),False)
  a.set_actor_scale3d(V(*(x/100 for x in size)))
  a.static_mesh_component.set_static_mesh(cube);a.static_mesh_component.set_material(0,mats[mat])
  a.static_mesh_component.set_collision_profile_name('BlockAll' if collision else 'NoCollision')
@@ -35,7 +35,7 @@ def marker(name,loc,yaw=0):
  if a is None:
   a=E.spawn_actor_from_class(unreal.TargetPoint,V(*loc));a.set_actor_label(name)
   a.set_editor_property('tags',[unreal.Name('Transmit.Flow')]);actors[name]=a
- a.set_actor_location(V(*loc),False,False);a.set_actor_rotation(unreal.Rotator(0,yaw,0),False);return a
+ a.set_actor_location(V(*loc),False,False);a.set_actor_rotation(unreal.Rotator(pitch=0,yaw=yaw,roll=0),False);return a
 
 def line(name,a,b,mat='Cyan'):
  dx=b[0]-a[0];dy=b[1]-a[1]

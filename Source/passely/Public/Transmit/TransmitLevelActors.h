@@ -18,7 +18,7 @@ enum class ETransmitFlowStep : uint8
 {
     TakeMotion, GiveBridge, CrossBridge, SendCarrier, ChaseCarrier,
     RecaptureCarrier, RerouteCarrier, ReachArena, CaptureDash,
-    PowerRam, CaptureAgain, BreakGate, Exit, Complete
+    PowerRam, CaptureAgain, BreakGate, Exit, Complete, ObserveImpact
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FTransmitLevelEvent);
@@ -44,6 +44,8 @@ class PASSELY_API ATransmitRam : public ATransmitMotionEndpointActor
 
 public:
     ATransmitRam();
+
+    bool IsImpactInProgress() const { return bInFlightImpact; }
 
     UPROPERTY(BlueprintAssignable, Category = "Transmit|Events")
     FTransmitLevelEvent OnArmed;

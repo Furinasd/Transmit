@@ -715,7 +715,8 @@ void ATransmitLevelDirector::UpdateFlow()
     else if (RouteEntryMarker && Player->GetActorLocation().X >= RouteEntryMarker->GetActorLocation().X)
         Checkpoint = FMath::Max(Checkpoint, 1);
 
-    if (Ram && Ram->Hits >= 2) SetFlowStep(ETransmitFlowStep::Exit);
+    if (Ram && Ram->IsImpactInProgress()) SetFlowStep(ETransmitFlowStep::ObserveImpact);
+    else if (Ram && Ram->Hits >= 2) SetFlowStep(ETransmitFlowStep::Exit);
     else if (Checkpoint == 2)
     {
         if (!bEntryTriggered) SetFlowStep(ETransmitFlowStep::ReachArena);
@@ -826,6 +827,9 @@ FString ATransmitLevelDirector::GetObjectiveText() const
     case ETransmitFlowStep::PowerRam: return TEXT("Deliver the captured charge to the Ram");
     case ETransmitFlowStep::CaptureAgain: return TEXT("Gate fractured. Capture one more charge");
     case ETransmitFlowStep::BreakGate: return TEXT("Break through with the final impact");
+    case ETransmitFlowStep::ObserveImpact:
+        return Ram && Ram->Hits >= 2 ? TEXT("Gate released")
+            : Ram && Ram->Hits == 1 ? TEXT("Gate fractured") : TEXT("Ram charged. Watch the gate");
     case ETransmitFlowStep::Exit: return TEXT("Transmission restored. Walk through");
     case ETransmitFlowStep::Complete: return TEXT("You moved motion. The way is open.");
     }
@@ -854,7 +858,10 @@ FString ATransmitLevelDirector::GetHintText() const
         return TEXT("Face the dock across the relay. The preview shows the new direction. Q to send.");
     case ETransmitFlowStep::ReachArena: return TEXT("The delivered carrier armed the Ram. Follow the connected line.");
     case ETransmitFlowStep::CaptureDash: return TEXT("Wait for the dash, then E. Its direction stays locked.");
-    case ETransmitFlowStep::PowerRam: case ETransmitFlowStep::BreakGate: return TEXT("Carry the charge around cover. Aim at the Ram and press Q.");
+    case ETransmitFlowStep::PowerRam: case ETransmitFlowStep::BreakGate:
+        return TEXT("Circle to the marked rear of the Ram. Aim at it and press Q; watch the gate ahead.");
+    case ETransmitFlowStep::ObserveImpact:
+        return TEXT("The captured charge is driving the Ram. Follow the impact along its rail.");
     case ETransmitFlowStep::CaptureAgain: return TEXT("The first hit held. Take another dash to finish the gate.");
     case ETransmitFlowStep::Exit: return TEXT("The threat is over. Follow the open passage.");
     case ETransmitFlowStep::Complete: return TEXT("E / Capture    Q / Transfer    R / Play again");

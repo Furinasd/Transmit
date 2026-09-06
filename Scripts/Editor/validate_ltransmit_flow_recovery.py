@@ -7,8 +7,11 @@ exec(base.read_text().rsplit('TRANSMIT_RUN=TransmitRun()',1)[0],globals())
 class FlowRecoveryRun(TransmitRun):
  def __init__(self):
   super().__init__()
-  original=self.steps;self.steps=[]
+  original=self.steps;self.steps=[];skip_return_walks=False
   for step in original:
+   if skip_return_walks and step[0] in ('walk (7780, 2800)', 'walk (7620, 2080)'):
+    continue
+   if step[0]=='capture dash two':skip_return_walks=False
    self.steps.append(step)
    if step[0]=='send carrier':
     self.add('inject route fall',lambda:self.fall())
@@ -20,10 +23,11 @@ class FlowRecoveryRun(TransmitRun):
     self.add('inject first-hit dash collision',lambda:self.hit_stance())
     self.wait('arena local retry preserves dock and hit',lambda:self.arena_restored(),12)
     for pos in [(7620,700),(7620,1420)]:self.walk(pos)
+    skip_return_walks=True
    if step[0]=='gate hit two':
     self.add('local retry after gate opens',lambda:self.a['Flow_Director'].request_local_retry())
     self.wait('open gate retry keeps threat ended',lambda:self.open_gate_retry_safe(),6)
-    for pos in [(7620,700),(7620,2450)]:self.walk(pos)
+    for pos in [(7620,700),(7780,2080)]:self.walk(pos)
   self.add('complete full reset',lambda:self.a['Flow_Reset'].request_room_reset())
   self.wait('full reset after completion',lambda:self.full_restored(),4)
   self.add('repeat full reset',lambda:self.a['Flow_Reset'].request_room_reset())

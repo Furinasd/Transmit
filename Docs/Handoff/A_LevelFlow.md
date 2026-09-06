@@ -43,7 +43,7 @@ A will add a narrow director flow-step observation and retry event, and explicit
 armed/impact events for B; no generic event framework. B may initially observe current
 real fields while those additions compile.
 
-## Status
+## Historical status — first increment
 
 In production. Baseline docs STATE/ARCHITECTURE contain historical missing-capability
 claims; existing source and map supersede those inventory claims. No current-run
@@ -97,3 +97,18 @@ Live flow validation in progress.
 - Mac Development build/file Cook/IoStore Stage succeeded (`/private/tmp/transmit-flow-package-file.log`, 164.72 seconds). Full staged app copied to `Saved/LTransmitCandidate/A1-Verified/Transmit.app`, signature verified, independently launched L_Transmit using Metal SM6. Native R and E observed. A1 package predates B2 and newest HUD. Closed after smoke.
 - Reusable `Scripts/package_ltransmit_mac.sh` verifies/copies full staged bundle; do not ship the incomplete earlier UAT archive. Packaging config selects formal map only and file-based cooked output.
 - B retains GUI lease for current preview validation, then returns it for A formal-map integration.
+
+## A3 — integrated candidate content
+
+- B2 `dfedd6b` integrated as `9b2ec1c`; B evidence update as `903c724`. Formal map uses the actual Presentation Rig, five materials and eight original cues. B remains isolated and frozen.
+- A authored material hierarchy, eight explicit cable corner references, a Ram operating mark with a gate-facing approach, and the open exit frame. Corrected Python Rotator positional arguments that had pitched guide strips and the arena retry marker instead of setting yaw.
+- BP_TransmitCharacter retains its existing 400 cm boom and 90 degree FOV; only SocketOffset changes to (0,70,50), exposing the Source and bridge together. This is the second A-owned binary alongside L_Transmit.umap.
+- Director holds an ObserveImpact objective through the real Ram stroke. Existing flow enum values are preserved; the new value is appended. Core transfer/ownership semantics are unchanged.
+- Final Editor module build passed: `/private/tmp/transmit-impact-flow-build.log` (12.17 s). Transmit automation: 25 passed, zero warning/failure/not-run, `Saved/LTransmitEvidence/CandidateTests/index.json`.
+- Saved shoulder-camera clean traversal: `run-1788699847.json`, 66.342 game seconds, actual CharacterMovement and MotionInteractor, no teleport/resource injection. Runtime frames: `Saved/LTransmitEvidence/candidate-1788699780/`, opening through completion, including both impacts at +0.45/+1.3 seconds. Script time does not measure human playtime.
+- Recovery `run-1788699643.json` passed Route fall, actual Charger collision after hit one, progress retention, open-gate retry with Charger inactive, completion and repeated R. Failure teleports are explicitly labeled.
+- Reset-during-stroke `run-1788699252.json` and external Route-owner fallback `run-1788699339.json` passed using real interaction transactions; exact initial resource ownership restored.
+- Native Backspace `run-1788699903.json` passed at Route: bridge retained, source restored, carrier/player empty, retry camera pitch zero.
+- Fresh Editor process reloaded 123 formal-map actors, eight cable references and the serialized camera. Five Blueprints compiled BS_UP_TO_DATE; Map Check 0 errors/0 warnings. Fresh PIE instance confirmed SocketOffset (0,70,50). Evidence `/private/tmp/transmit-final-reload.log`.
+- Full Details/inline-struct edit-save-reopen authoring smoke remains a human gate. Rig selection/Details generation was observed, but native coordinate control did not reliably reach nested fields. API save/reopen and builds are not a substitute.
+- Final Mac packaging/launch evidence will follow against the A3 content commit. No Win64 validation or human experience acceptance is claimed.
