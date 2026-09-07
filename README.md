@@ -144,15 +144,19 @@ git lfs pull
 
 ## 验证与打包
 
-候选内容版本 `ea081ff` 已完成 Mac Editor/Game build、25/25 automation、整合视觉与肩侧镜头后的连续 PIE 通关和失败恢复，并生成完整 Mac 独立包，实际验证 R/E/Q/Backspace 开场交互。独立包完整真人通关仍待验收；细节和适用版本见 [`Docs/STATE.md`](Docs/STATE.md)。脚本通关秒数不代表真人体验时长，编译通过也不等于 Details/可读性验收。
+当前源版本与历史运行证据见 [`Docs/STATE.md`](Docs/STATE.md)。2026-09-07 的 gameplay 检查点记录 27/27 自动化和连续 PIE 通关；这些记录不证明 Windows 封包或真人首玩验收。
 
-本地 Mac 候选打包：
+封包命令、产物目录与平台验收见 [`Docs/PACKAGING.md`](Docs/PACKAGING.md)：
 
 ```bash
 bash Scripts/package_ltransmit_mac.sh
 ```
 
-输出在 `Saved/LTransmitCandidate/<timestamp>/Transmit.app`，包含正式地图及其引用内容。脚本使用完整 staged bundle 并核验签名；可用 `TRANSMIT_ENGINE_DIR` 指定本机引擎目录。当前没有 Win64 最终包验证结论。
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/package_ltransmit_windows.ps1 -EngineDir "C:\Program Files\Epic Games\UE_5.8"
+```
+
+Windows 脚本必须在 Windows 上执行；当前尚无本轮 Win64 EXE 构建／运行通过证据。未完成设计与普通 Motion 入 Boss 房问题见 [`提交版差额`](Docs/submission/KNOWN_GAPS.md)。
 
 Ely 的首次完整试玩仍需确认：目标理解、Route 中继读图、Charge 捕获窗口、两次撞门差异、局部恢复、相机、节奏与视听平衡。5–7 分钟只是体验假设。
 

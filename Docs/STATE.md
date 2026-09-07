@@ -4,6 +4,13 @@
 
 Last inspected: 2026-09-07, weak guidance / target-locked counterstroke refinement. Human first-play feel and foreground packaged profiling remain open.
 
+## Delivery checkpoint — 2026-09-07
+
+- Packaging / PR preparation continues on `Jason/L_Transmit_v01`, targeting `main`.
+- Windows packaging entry: `Scripts/package_ltransmit_windows.ps1`; instructions: `Docs/PACKAGING.md`. No Windows host or registered repository Actions runner is available in this session; Win64 build/cook/runtime remain unverified.
+- MCP / AllToolsets are restricted to Editor targets for packaging; gameplay and binary assets are unchanged by this delivery pass.
+- User-reported ordinary Motion carried into Arena blocks Boss capture; unresolved. SUV / folding-screen identity and Boss staging are unfinished design work, recorded in `Docs/submission/KNOWN_GAPS.md`. Notion synchronization is pending explicit destination approval. These are not fixes or accepted visual changes.
+
 ## Current experience refinement checkpoint
 
 - Latest user-approved rules supersede the older fixed-axis counterstroke: Q locks the vector from the rail carrier to Boss's current position; flight stays straight. Preview, body and impact effects share this output direction. Arena capture alone is limited to a 1000 cm horizontal radius from the player (approximately two authored floor tiles), with the same aimed E / visibility checks.
