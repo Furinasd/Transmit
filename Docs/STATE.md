@@ -7,9 +7,11 @@ Last inspected: 2026-09-07, weak guidance / target-locked counterstroke refineme
 ## Delivery checkpoint — 2026-09-07
 
 - Packaging / PR preparation continues on `Jason/L_Transmit_v01`, targeting `main`.
-- Windows packaging entry: `Scripts/package_ltransmit_windows.ps1`; instructions: `Docs/PACKAGING.md`. No Windows host or registered repository Actions runner is available in this session; Win64 build/cook/runtime remain unverified.
+- Windows packaging entry: `Scripts/package_ltransmit_windows.ps1`; instructions: `Docs/PACKAGING.md`. Ely will pull this branch on the Windows machine and perform final packaging/testing; no repository Actions runner is registered. Win64 build/cook/runtime remain unverified.
+- Per user instruction, Mac packaging was stopped (UAT exit 130); no new Mac candidate or platform success is claimed.
+- Source scan found no platform-specific OS calls or hardcoded local paths in `Source/`; Game module dependencies do not include UnrealEd/MCP. Windows script arguments were checked against the installed UE 5.8 AutomationTool source; the PowerShell script has not been executed on Windows.
 - MCP / AllToolsets are restricted to Editor targets for packaging; gameplay and binary assets are unchanged by this delivery pass.
-- User-reported ordinary Motion carried into Arena blocks Boss capture; unresolved. SUV / folding-screen identity and Boss staging are unfinished design work, recorded in `Docs/submission/KNOWN_GAPS.md`. Notion synchronization is pending explicit destination approval. These are not fixes or accepted visual changes.
+- User-reported ordinary Motion carried into Arena blocks Boss capture; unresolved. SUV / folding-screen identity and Boss staging are unfinished design work, recorded in `Docs/submission/KNOWN_GAPS.md`. Notion submission pages 04 and 08 were synchronized and fetched again to verify the additions. These are not fixes or accepted visual changes.
 
 ## Current experience refinement checkpoint
 
