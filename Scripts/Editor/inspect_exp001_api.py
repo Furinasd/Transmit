@@ -40,9 +40,9 @@ for api_name in (
         report(f"{api_name}.methods", methods)
 
 for asset_path in (
-    "/Game/ThirdPerson/Blueprints/BP_ThirdPersonCharacter",
-    "/Game/ThirdPerson/Blueprints/BP_ThirdPersonPlayerController",
-    "/Game/ThirdPerson/Blueprints/BP_ThirdPersonGameMode",
+    "/Game/Transmit/Blueprints/BP_TransmitCharacter",
+    "/Game/Transmit/Blueprints/BP_TransmitPlayerController",
+    "/Game/Transmit/Blueprints/BP_TransmitGameMode",
     "/Game/Input/IMC_Default",
 ):
     asset = unreal.load_asset(asset_path)
@@ -76,8 +76,8 @@ report("EnhancedActionKeyMapping.fields", dir(unreal.EnhancedActionKeyMapping())
 report("InputMappingContextMappingData.fields", dir(unreal.InputMappingContextMappingData()))
 
 for asset_path in (
-    "/Game/ThirdPerson/Blueprints/BP_ThirdPersonGameMode",
-    "/Game/ThirdPerson/Blueprints/BP_ThirdPersonPlayerController",
+    "/Game/Transmit/Blueprints/BP_TransmitGameMode",
+    "/Game/Transmit/Blueprints/BP_TransmitPlayerController",
 ):
     blueprint = unreal.load_asset(asset_path)
     cdo = unreal.get_default_object(blueprint.generated_class())

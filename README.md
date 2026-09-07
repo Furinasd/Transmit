@@ -46,12 +46,11 @@ Transmit/
 ├─ Config/                 # 项目默认配置、输入与启动地图
 ├─ Source/passely/         # Motion 核心 C++：状态、事务、接口、Reset、方向策略、Carrier 与自动化测试
 ├─ Content/
-│  ├─ ThirdPerson/         # 当前角色、GameMode 与入口关卡
-│  ├─ Transmit/            # EXP-001 输入、蓝图与 L_TestChamber
+│  ├─ Transmit/            # 正式角色、GameMode、L_Transmit、L_TestChamber 与表现资源
 │  ├─ Input/               # Enhanced Input 资源
 │  ├─ LevelPrototyping/    # 门、跳板、目标与灰盒资源
 │  ├─ Characters/          # Mannequin 角色、动画与材质资源
-│  └─ __ExternalActors__/  # World Partition 外部 Actor 数据
+│  └─ __ExternalActors__/  # 所属关卡的 World Partition 外部 Actor 数据（不是缓存）
 ├─ Docs/                   # 目标、设计契约、架构、ADR 与状态快照
 ├─ passely.uproject        # 当前 Unreal 工程入口
 ├─ .gitattributes          # Unreal 二进制资源的 Git LFS 规则

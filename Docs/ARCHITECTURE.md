@@ -21,15 +21,14 @@ The GitHub repository is named `Transmit`. The Unreal project file and internal 
 
 The project now has a custom C++ runtime module under `Source/passely/` (Motion types, ownership component, Actor interface, interactor, room reset, endpoint/indicator actors, and focused automation tests) plus a Blueprint layer under `Content/Transmit/` (input assets, Character/Controller/GameMode/Source/Receiver Blueprints, and `L_TestChamber`). There is no project-local plugin content under `Plugins/`.
 
-Map architecture under Final v0.4: `L_TestChamber` is the regression / micro-validation map; `L_Transmit` is the single production map containing continuous Zone 1 Learn → Zone 2 Route → Zone 3 Weaponize. `L_Transmit` does not exist in the repository and is future content; L1 / L2 / L3 remain design progression IDs, not independent `.umap` files.
+Map architecture under Final v0.4: `L_TestChamber` is the regression / micro-validation map; `L_Transmit` is the single production map containing continuous Zone 1 Learn → Zone 2 Route → Zone 3 Weaponize. Both maps exist in the repository; L1 / L2 / L3 remain design progression IDs, not independent `.umap` files.
 
 | Boundary | Current responsibility |
 | --- | --- |
 | `passely.uproject` | Unreal project entrypoint and Engine-plugin declarations |
 | `Config/DefaultEngine.ini` | Startup map, default GameMode, renderer, target-platform, asset-manager, and project settings |
 | `Source/passely/` | EXP-001 Motion core C++: `FMotionState`, `UMotionTransferComponent`, `IMotionTransferable`, interactor, room reset, endpoint/direction indicators, automation tests |
-| `Content/ThirdPerson/` | Current map plus Character, PlayerController, and GameMode Blueprints |
-| `Content/Transmit/` | EXP-001 Blueprint layer: Transmit input assets, Character/Controller/GameMode/Source/Receiver Blueprints, `L_TestChamber` |
+| `Content/Transmit/` | Production Character/Controller/GameMode and Motion Blueprints, input and presentation assets, `L_Transmit`, and regression map `L_TestChamber` |
 | `Content/Input/` | Enhanced Input actions, mapping contexts, and touch interface assets |
 | `Content/Characters/Mannequins/` | Manny/Quinn meshes, rigs, materials, textures, and animation library |
 | `Content/LevelPrototyping/` | Template geometry, materials, and sample interactables used for level assembly |
@@ -42,10 +41,10 @@ Map architecture under Final v0.4: `L_TestChamber` is the regression / micro-val
 passely.uproject
         ↓
 Config/DefaultEngine.ini
-        ├── startup/default map: /Game/ThirdPerson/Lvl_ThirdPerson
-        └── default GameMode: BP_ThirdPersonGameMode
+        ├── startup/default map: /Game/Transmit/Maps/L_Transmit
+        └── default GameMode: BP_TransmitGameMode
                     ↓
-BP_ThirdPersonPlayerController + BP_ThirdPersonCharacter
+BP_TransmitPlayerController + BP_TransmitCharacter
                     ↓
 Enhanced Input mappings/actions
                     ↓

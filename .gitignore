@@ -48,6 +48,10 @@ Content/Developers/
 AutomationReport/
 TestResults/
 
+# Python automation bytecode
+__pycache__/
+*.py[cod]
+
 # Rider / JetBrains
 *.opensdf
 *.sdf

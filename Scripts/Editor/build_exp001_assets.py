@@ -111,13 +111,11 @@ def configure_input_assets():
 def configure_character_blueprint():
     path = f"{BLUEPRINT_ROOT}/BP_TransmitCharacter"
     blueprint = unreal.load_asset(path)
-    if not blueprint:
-        blueprint = unreal.EditorAssetLibrary.duplicate_asset(
-            "/Game/ThirdPerson/Blueprints/BP_ThirdPersonCharacter",
-            path,
-        )
     if not isinstance(blueprint, unreal.Blueprint):
-        raise RuntimeError("Failed to duplicate BP_ThirdPersonCharacter")
+        raise RuntimeError(
+            "BP_TransmitCharacter is an authored project asset. Restore it from "
+            "version control before configuring EXP-001; the unused template was removed."
+        )
 
     unreal.BlueprintEditorLibrary.reparent_blueprint(
         blueprint,
