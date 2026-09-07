@@ -48,7 +48,6 @@ Transmit/
 ├─ Content/
 │  ├─ Transmit/            # 正式角色、GameMode、L_Transmit、L_TestChamber 与表现资源
 │  ├─ Input/               # Enhanced Input 资源
-│  ├─ LevelPrototyping/    # 门、跳板、目标与灰盒资源
 │  ├─ Characters/          # Mannequin 角色、动画与材质资源
 │  └─ __ExternalActors__/  # 所属关卡的 World Partition 外部 Actor 数据（不是缓存）
 ├─ Docs/                   # 目标、设计契约、架构、ADR 与状态快照

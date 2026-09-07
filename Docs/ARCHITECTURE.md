@@ -31,7 +31,6 @@ Map architecture under Final v0.4: `L_TestChamber` is the regression / micro-val
 | `Content/Transmit/` | Production Character/Controller/GameMode and Motion Blueprints, input and presentation assets, `L_Transmit`, and regression map `L_TestChamber` |
 | `Content/Input/` | Enhanced Input actions, mapping contexts, and touch interface assets |
 | `Content/Characters/Mannequins/` | Manny/Quinn meshes, rigs, materials, textures, and animation library |
-| `Content/LevelPrototyping/` | Template geometry, materials, and sample interactables used for level assembly |
 | `Content/__ExternalActors__/` and `Content/__ExternalObjects__/` | One-file-per-actor/object data belonging to the current map; these are source assets, not generated cache |
 | `Docs/` | Product contract, architecture boundary, decisions, and handoff state |
 

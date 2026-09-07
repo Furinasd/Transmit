@@ -34,7 +34,9 @@ $uatArgs = @(
     'BuildCookRun', "-project=$repo\passely.uproject", '-noP4', '-platform=Win64',
     "-clientconfig=$Configuration", '-build', '-cook', '-stage', '-pak', '-iostore',
     '-archive', "-archivedirectory=$OutputDir\Package", "-stagingdirectory=$OutputDir\Stage",
-    '-map=/Game/Transmit/Maps/L_Transmit', '-AdditionalCookerOptions=-SkipZenStore',
+    '-map=/Game/Transmit/Maps/L_Transmit',
+    # The cooker needs no MCP listener; an interactive Editor may already own its port.
+    '-AdditionalCookerOptions=-SkipZenStore -ini:EditorPerProjectUserSettings:[/Script/ModelContextProtocolEngine.ModelContextProtocolSettings]:bAutoStartServer=False',
     '-prereqs', '-unattended', '-utf8output'
 )
 $uatArgs | Set-Content (Join-Path $OutputDir 'uat-arguments.txt')
