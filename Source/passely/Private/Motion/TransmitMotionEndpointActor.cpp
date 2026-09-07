@@ -6,6 +6,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
+#include "Motion/MotionDirectionIndicatorComponent.h"
 #include "Motion/MotionRoomResetController.h"
 #include "Motion/MotionTransferComponent.h"
 #include "TimerManager.h"
@@ -39,9 +40,8 @@ ATransmitMotionEndpointActor::ATransmitMotionEndpointActor()
 
     DirectionIndicator = CreateDefaultSubobject<UArrowComponent>(TEXT("DirectionIndicator"));
     DirectionIndicator->SetupAttachment(SceneRoot);
-    DirectionIndicator->SetRelativeLocation(FVector(0.0f, 0.0f, 100.0f));
     DirectionIndicator->SetArrowColor(FColor::Cyan);
-    DirectionIndicator->SetArrowSize(2.0f);
+    DirectionIndicator->SetArrowSize(0.6f);
     DirectionIndicator->SetHiddenInGame(false);
     DirectionIndicator->SetVisibility(false);
 
@@ -75,9 +75,11 @@ void ATransmitMotionEndpointActor::Tick(const float DeltaSeconds)
 
     FMotionState State;
     const bool bHasMotion = Motion->TryGetMotionState(State);
-    if (!bHasMotion || !bAnimateOwnedMotion)
+    const bool bHasDirectionToLoop = bHasMotion || bConsumedSinceReset;
+    if (!bHasDirectionToLoop || !bAnimateOwnedMotion)
     {
-        bHadMotionLastFrame = bHasMotion;
+        bHadMotionLastFrame = false;
+        MotionPreviewDistanceTravelled = 0.0f;
         return;
     }
 
@@ -87,16 +89,29 @@ void ATransmitMotionEndpointActor::Tick(const float DeltaSeconds)
     }
     bHadMotionLastFrame = true;
 
-    const float PreviewSpeed = State.Magnitude * MotionPreviewSpeedScale;
+    const float LoopMagnitude = bHasMotion ? State.Magnitude : ConsumedLoopMagnitude;
+    const float PreviewSpeed = FMath::Max(0.0f, LoopMagnitude) * MotionPreviewSpeedScale;
     MotionPreviewDistanceTravelled = FMath::Fmod(
         MotionPreviewDistanceTravelled + PreviewSpeed * DeltaSeconds,
         FMath::Max(1.0f, MotionPreviewDistance));
 
+    const FVector LoopWorldDirection = bHasMotion
+        ? State.Direction.GetSafeNormal()
+        : ConsumedLoopDirection.GetSafeNormal();
+    if (LoopWorldDirection.IsNearlyZero())
+    {
+        return;
+    }
+
     const FVector LocalDirection = GetActorTransform()
-        .InverseTransformVectorNoScale(State.Direction)
+        .InverseTransformVectorNoScale(LoopWorldDirection)
         .GetSafeNormal();
     Body->SetRelativeLocation(
         InitialBodyRelativeLocation + LocalDirection * MotionPreviewDistanceTravelled);
+    if (bHasMotion)
+    {
+        UpdateDirectionIndicator(State);
+    }
 }
 
 void ATransmitMotionEndpointActor::HandleMotionStateChanged(
@@ -113,12 +128,20 @@ void ATransmitMotionEndpointActor::HandleMotionConsumed(
     const FMotionTransferResult& Result)
 {
     bConsumedSinceReset = Result.bSucceeded && Result.bConsumed;
+    ConsumedLoopDirection = bConsumedSinceReset
+        ? Result.StateSnapshot.Direction.GetSafeNormal()
+        : FVector::ZeroVector;
+    ConsumedLoopMagnitude = bConsumedSinceReset
+        ? Result.StateSnapshot.Magnitude
+        : 0.0f;
     RefreshPresentation();
 }
 
 void ATransmitMotionEndpointActor::HandlePostRoomReset()
 {
     bConsumedSinceReset = false;
+    ConsumedLoopDirection = FVector::ZeroVector;
+    ConsumedLoopMagnitude = 0.0f;
     bHadMotionLastFrame = false;
     MotionPreviewDistanceTravelled = 0.0f;
     Body->SetRelativeLocation(InitialBodyRelativeLocation);
@@ -127,12 +150,12 @@ void ATransmitMotionEndpointActor::HandlePostRoomReset()
 
 void ATransmitMotionEndpointActor::BindRoomResetController()
 {
-    for (TActorIterator<AMotionRoomResetController> ResetIt(GetWorld()); ResetIt; ++ResetIt)
+    TActorIterator<AMotionRoomResetController> ResetIt(GetWorld());
+    if (ResetIt)
     {
         ResetIt->OnPostRoomReset.AddDynamic(
             this,
             &ATransmitMotionEndpointActor::HandlePostRoomReset);
-        break;
     }
 }
 
@@ -145,14 +168,24 @@ void ATransmitMotionEndpointActor::RefreshPresentation()
     DirectionIndicator->SetVisibility(bHasMotion);
     DirectionIndicator->SetHiddenInGame(false);
 
-    if (bHasMotion)
-    {
-        DirectionIndicator->SetWorldRotation(State.Direction.Rotation());
-        DirectionIndicator->SetArrowSize(FMath::Clamp(State.Magnitude / 300.0f, 1.5f, 4.0f));
-    }
-
     Body->SetRelativeScale3D(
         bConsumedSinceReset
             ? InitialBodyRelativeScale * ConsumedBodyScaleMultiplier
             : InitialBodyRelativeScale);
+    if (bHasMotion)
+    {
+        UpdateDirectionIndicator(State);
+    }
+}
+
+void ATransmitMotionEndpointActor::UpdateDirectionIndicator(const FMotionState& State)
+{
+    if (const UStaticMesh* BodyMesh = Body->GetStaticMesh())
+    {
+        DirectionIndicator->SetWorldLocation(
+            UMotionDirectionIndicatorComponent::CalculateFaceAnchor(
+                BodyMesh->GetBoundingBox(), State.Direction, 8.0f, Body->GetComponentTransform()));
+    }
+    DirectionIndicator->SetWorldRotation(State.Direction.Rotation());
+    DirectionIndicator->SetArrowSize(0.6f * FMath::Clamp(State.Magnitude / 600.0f, 0.8f, 1.25f));
 }

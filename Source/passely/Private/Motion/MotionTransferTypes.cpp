@@ -25,3 +25,35 @@ FMotionCompatibilityResult FMotionCompatibilityResult::Reject(const EMotionTrans
     Result.Rejection = Reason;
     return Result;
 }
+
+FMotionDirectionResolution FMotionDirectionResolution::Invalid()
+{
+    FMotionDirectionResolution Result;
+    Result.bValid = false;
+    Result.CanonicalDirection = EMotionCanonicalDirection::None;
+    Result.WorldDirection = FVector::ZeroVector;
+    return Result;
+}
+
+FMotionDirectionResolution FMotionDirectionResolution::PreserveSource(
+    const FVector& InWorldDirection)
+{
+    FMotionDirectionResolution Result;
+    const FVector Normalized = InWorldDirection.GetSafeNormal();
+    Result.bValid = !Normalized.IsNearlyZero();
+    Result.CanonicalDirection = EMotionCanonicalDirection::None;
+    Result.WorldDirection = Normalized;
+    return Result;
+}
+
+FMotionDirectionResolution FMotionDirectionResolution::Make(
+    const EMotionCanonicalDirection InCanonicalDirection,
+    const FVector& InWorldDirection)
+{
+    FMotionDirectionResolution Result;
+    Result.bValid = InCanonicalDirection != EMotionCanonicalDirection::None
+        && !InWorldDirection.IsNearlyZero();
+    Result.CanonicalDirection = InCanonicalDirection;
+    Result.WorldDirection = InWorldDirection.GetSafeNormal();
+    return Result;
+}

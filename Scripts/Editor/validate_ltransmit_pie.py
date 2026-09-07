@@ -1,0 +1,142 @@
+"""Live-frame integration run. Uses actual CharacterMovement and MotionInteractor.
+No ownership injection, direct component transfers, or actor teleport in the clean run.
+Start PIE in L_Transmit first, then exec this file. Results are local Saved evidence.
+"""
+import unreal,math,json,time,pathlib
+if globals().get('TRANSMIT_RUN') and not TRANSMIT_RUN.done:TRANSMIT_RUN.finish(False,'replaced')
+class TransmitRun:
+ def __init__(self):
+  self.w=unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_game_world()
+  assert self.w and 'L_Transmit' in self.w.get_name()
+  self.p=unreal.GameplayStatics.get_player_pawn(self.w,0);self.pc=unreal.GameplayStatics.get_player_controller(self.w,0)
+  self.i=self.p.get_component_by_class(unreal.MotionInteractorComponent)
+  self.a={a.get_actor_label():a for a in unreal.GameplayStatics.get_all_actors_of_class(self.w,unreal.Actor)}
+  self.aim_pending=None;self.rows=[];self.done=False;self.steps=[];self.index=0;self.since=self.now();self.wall=time.monotonic();self.start=self.now();self.real_start=time.monotonic()
+  self.add('reset',lambda:self.a['Flow_Reset'].request_room_reset())
+  if 'Pacing_LearnBridgeA' in self.a:
+   self.walk((-8500,0))
+   self.add('capture practice A',lambda:self.verb('Pacing_LearnSourceA','capture'))
+   self.add('send practice A',lambda:self.verb('Pacing_LearnBridgeA','transfer',yaw=0))
+   self.wait('practice A spans gap',lambda:self.a['Pacing_LearnBridgeA'].is_blocked_by_collision() and self.a['Pacing_LearnBridgeA'].get_actor_location().x>-6600,12)
+   for pos in [(-7100,0),(-6500,0),(-5600,0),(-5200,200)]:self.walk(pos)
+   self.add('capture practice B',lambda:self.verb('Pacing_LearnSourceB','capture'))
+   self.add('turn practice B',lambda:self.verb('Pacing_LearnBridgeB','transfer',yaw=90))
+   self.wait('practice B spans gap',lambda:self.a['Pacing_LearnBridgeB'].is_blocked_by_collision() and self.a['Pacing_LearnBridgeB'].get_actor_location().y>1800,12)
+   for pos in [(-5200,1200),(-5200,2000),(-5200,3300),(-1500,3300),(-1500,0),(0,0)]:self.walk(pos)
+  self.add('capture learn',lambda:self.verb('Learn_Source','capture'))
+  self.add('send bridge',lambda:self.verb('Learn_BridgeSlab','transfer'))
+  self.wait('bridge spans gap',lambda:self.a['Learn_BridgeSlab'].is_blocked_by_collision() and self.a['Learn_BridgeSlab'].get_actor_location().x>1600,12)
+  for pos in [(600,0),(1150,0),(1950,0),(2440,0)]:self.walk(pos)
+  self.add('capture route',lambda:self.verb('Route_Source','capture'))
+  self.walk((2750,0))
+  self.add('send carrier',lambda:self.verb('Route_Carrier','transfer'))
+  for pos in [(3100,0),(3100,-920),(3750,-920),(4770,-920),(5150,-700)]:self.walk(pos)
+  self.wait('carrier catch',lambda:self.a['Route_Carrier'].is_blocked_by_collision(),12)
+  self.walk((5350,-320))
+  self.add('recapture carrier',lambda:self.verb('Route_Carrier','capture'))
+  self.add('reroute carrier',lambda:self.verb('Route_Carrier','transfer',yaw=90))
+  self.wait('ram armed',lambda:self.a['Weaponize_Ram'].get_editor_property('armed'),15)
+  if 'Pacing_RouteBridgeA' in self.a:
+   for pos in [(5350,-650),(5350,-3500),(5350,-5500),(4600,-6200)]:self.walk(pos)
+   self.add('capture reuse resource',lambda:self.verb('Pacing_RouteSource','capture'))
+   self.add('send reuse bridge',lambda:self.verb('Pacing_RouteBridgeA','transfer',yaw=0))
+   self.wait('reuse bridge spans gap',lambda:self.a['Pacing_RouteBridgeA'].is_blocked_by_collision() and self.a['Pacing_RouteBridgeA'].get_actor_location().x>6400,12)
+   for pos in [(5700,-6200),(6500,-6200),(7350,-6200)]:self.walk(pos)
+   self.add('reclaim crossing resource',lambda:self.verb('Pacing_RouteBridgeA','capture'))
+   for pos in [(7900,-6200),(7900,-4100)]:self.walk(pos)
+   self.add('turn reused resource north',lambda:self.verb('Pacing_RouteBridgeB','transfer',yaw=90))
+   self.wait('reused bridge spans gap',lambda:self.a['Pacing_RouteBridgeB'].is_blocked_by_collision() and self.a['Pacing_RouteBridgeB'].get_actor_location().y>-2600,12)
+   for pos in [(7900,-3400),(7900,-2500),(7900,-600),(7000,-600)]:self.walk(pos)
+  else:
+   for pos in [(5350,-650),(5850,-650)]:self.walk(pos)
+  for pos in [(7000,-500),(7000,700),(6700,1900),(6800,2530)]:self.walk(pos)
+  self.wait('capture dash one',lambda:self.capture_dash(),25)
+  self.wait('power ram one',lambda:self.fire_rail(),25)
+  self.wait('gate hit one',lambda:self.a['Weaponize_Ram'].hits==1,4)
+  self.wait('capture dash two',lambda:self.capture_dash(),25)
+  self.wait('power ram two',lambda:self.fire_rail(),25)
+  self.wait('gate hit two',lambda:self.a['Weaponize_Ram'].hits==2,4)
+  for pos in [(7400,2850),(7800,2850),(8000,2750),(8460,2530),(8880,2530)]:self.walk(pos)
+  self.wait('director complete',lambda:self.a['Flow_Director'].is_complete() and not self.a['Weaponize_Gate'].get_actor_enable_collision(),4)
+  self.handle=unreal.register_slate_post_tick_callback(self.tick)
+  self.emit('begin',note='continuous scripted movement, real targeting, no injected Motion; human acceptance separate')
+ def now(self):return unreal.GameplayStatics.get_time_seconds(self.w)
+ def emit(self,event,**kwargs):
+  row={'event':event,'game_seconds':round(self.now()-self.start,3),'wall_seconds':round(time.monotonic()-self.real_start,3),**kwargs};self.rows.append(row);unreal.log('TRANSMIT_RUN '+json.dumps(row,default=str))
+ def add(self,n,f):self.steps.append((n,f,3,False))
+ def wait(self,n,f,t):self.steps.append((n,f,t,True))
+ def walk(self,pos):
+  def action():
+   loc=self.p.get_actor_location();d=unreal.Vector(pos[0]-loc.x,pos[1]-loc.y,0);length=math.hypot(d.x,d.y)
+   if length<65:self.p.character_movement.stop_movement_immediately();return True
+   self.p.add_movement_input(d/length,1,True)
+   self.pc.set_control_rotation(unreal.Rotator(pitch=-7,yaw=math.degrees(math.atan2(d.y,d.x)),roll=0))
+   return False
+  self.wait('walk '+str(pos),action,20)
+ def verb(self,label,verb,yaw=None):
+  a=self.a[label];eye,_=self.p.get_actor_eyes_view_point();r=unreal.MathLibrary.find_look_at_rotation(eye,a.get_actor_location())
+  if yaw is not None:r.yaw=yaw
+  key=(label,verb,yaw)
+  if self.aim_pending is None or self.aim_pending[0]!=key:
+   self.pc.set_control_rotation(r);self.i.clear_target();self.aim_pending=(key,self.now());return None
+  # Gameplay POV updates on a later camera tick than SetControlRotation.
+  if self.now()-self.aim_pending[1]<.3:return None
+  self.i.refresh_target();preview=self.i.get_current_preview()
+  self.aim_pending=None
+  if preview.target!=a or not preview.eligible:
+   self.emit('target failure',expected=label,selected=preview.target.get_actor_label() if preview.target else None,preview=str(preview),player=str(self.p.get_actor_location()));return False
+  result=self.i.request_capture() if verb=='capture' else self.i.request_transfer()
+  self.emit(verb,target=label,ok=result.succeeded,result=str(result),preview=str(preview));return result.succeeded
+ def aim_live(self,actor):
+  eye,_=self.p.get_actor_eyes_view_point()
+  self.pc.set_control_rotation(unreal.MathLibrary.find_look_at_rotation(eye,actor.get_actor_location()))
+  self.i.refresh_target()
+  return self.i.get_current_preview()
+ def capture_dash(self):
+  ch=self.a['Weaponize_Charger'];preview=self.aim_live(ch)
+  if not ch.state_machine.is_capture_window_open() or preview.target!=ch or not preview.eligible:return False
+  result=self.i.request_capture()
+  if result.succeeded:self.emit('capture',target='Weaponize_Charger',ok=True)
+  return result.succeeded
+ def fire_rail(self):
+  carrier=self.a['Route_Carrier'];boss=self.a['Weaponize_Charger'];preview=self.aim_live(carrier)
+  p=boss.get_actor_location();c=carrier.get_actor_location()
+  if abs(p.x-7980)>1 or abs(p.y-2530)>1 or abs(c.y-p.y)>70:return False
+  if boss.state_machine.get_state() not in [unreal.MotionChargerState.RECOVERY,unreal.MotionChargerState.IDLE]:return False
+  if preview.target!=carrier or not preview.eligible:return False
+  result=self.i.request_transfer()
+  if result.succeeded:self.emit('transfer',target='Route_Carrier',ok=True)
+  return result.succeeded
+ def tick(self,dt):
+  if self.done:return
+  try:
+   if self.index>=len(self.steps):self.finish(True,'exit reached');return
+   n,f,timeout,retry=self.steps[self.index];age=self.now()-self.since
+   if age<.25:return
+   ok=f()
+   if ok is None and age<=timeout:return
+   if ok:
+    self.emit('step',name=n,player=str(self.p.get_actor_location()));self.index+=1;self.since=self.now();self.wall=time.monotonic()
+   elif not retry or age>timeout or time.monotonic()-self.wall>90:self.finish(False,'step failed: '+n)
+  except Exception as e:
+   import traceback
+   self.finish(False,traceback.format_exc())
+ def finish(self,ok,reason):
+  if self.done:return
+  self.done=True;unreal.unregister_slate_post_tick_callback(self.handle)
+  # PIE may have ended before the callback: persist the failure even when its
+  # World/Pawn wrappers are invalid. Do not call emit(), which reads the World.
+  player=None
+  try:
+   self.p.character_movement.stop_movement_immediately()
+   player=str(self.p.get_actor_location())
+  except Exception as error:
+   ok=False;reason=str(reason)+'; PIE cleanup: '+str(error)
+  seconds=None
+  try:seconds=round(self.now()-self.start,3)
+  except Exception as error:ok=False;reason=str(reason)+'; World unavailable: '+str(error)
+  row=dict(event='complete',ok=ok,reason=reason,player=player,game_seconds=seconds,wall_seconds=round(time.monotonic()-self.real_start,3))
+  self.rows.append(row);unreal.log('TRANSMIT_RUN '+json.dumps(row,default=str))
+  dest=pathlib.Path(unreal.Paths.project_saved_dir())/'LTransmitEvidence';dest.mkdir(parents=True,exist_ok=True)
+  (dest/('run-'+str(int(time.time()))+'.json')).write_text(json.dumps(self.rows,indent=2,default=str))
+TRANSMIT_RUN=TransmitRun()

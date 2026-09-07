@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 
+#include "Motion/MotionCanonicalDirectionResolver.h"
 #include "Motion/MotionTransferTypes.h"
 #include "MotionInteractorComponent.generated.h"
 
@@ -36,6 +37,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Motion|Interaction")
     FMotionTransferResult RequestTransfer();
 
+    UPROPERTY(Instanced, EditAnywhere, Category = "Motion|Direction")
+    TObjectPtr<UMotionCanonicalDirectionResolver> DirectionResolver;
+
     UFUNCTION(BlueprintPure, Category = "Motion|Targeting")
     FMotionInteractionPreview GetCurrentPreview() const;
 
@@ -53,6 +57,14 @@ public:
         float NewRawScore,
         float InStickyBonus);
 
+    // Single authoritative outgoing-direction seam for both Preview and Commit.
+    // CameraCanonical delegates to the existing resolver; PreserveSource keeps
+    // the source-authored world direction carried by the Motion State.
+    static FMotionDirectionResolution ResolveTransferDirection(
+        const FMotionState& CarriedState,
+        const FRotator& CameraRotation,
+        UMotionCanonicalDirectionResolver* Resolver);
+
 protected:
     virtual void TickComponent(
         float DeltaTime,
@@ -66,6 +78,9 @@ private:
         FName ParticipantId = NAME_None;
         float RawScore = -BIG_NUMBER;
         bool bEligible = false;
+        EMotionCanonicalDirection CanonicalDirection = EMotionCanonicalDirection::None;
+        FVector ProjectedWorldDirection = FVector::ZeroVector;
+        bool bHasProjectedDirection = false;
         FMotionCompatibilityResult Compatibility;
         FGameplayTag MagnitudeTier;
         FMotionTransferContext Context;
@@ -75,7 +90,7 @@ private:
     float TargetingRange = 2000.0f;
 
     UPROPERTY(EditAnywhere, Category = "Motion|Targeting", meta = (ClampMin = "1.0", ClampMax = "89.0"))
-    float AimConeHalfAngleDegrees = 18.0f;
+    float AimConeHalfAngleDegrees = 28.0f;
 
     UPROPERTY(EditAnywhere, Category = "Motion|Targeting", meta = (ClampMin = "0.0"))
     float AngleWeight = 1.0f;
@@ -100,12 +115,13 @@ private:
     double LastRequestTimeSeconds = -BIG_NUMBER;
 
     UMotionTransferComponent* ResolvePlayerMotionComponent() const;
-    bool GetViewPoint(FVector& OutOrigin, FVector& OutForward) const;
+    bool GetViewPoint(FVector& OutOrigin, FRotator& OutRotation) const;
     void GatherCandidates(TArray<FCandidateEvaluation>& OutCandidates) const;
     FCandidateEvaluation EvaluateCandidate(
         AActor* Candidate,
+        const FVector& InteractionOrigin,
         const FVector& ViewOrigin,
-        const FVector& ViewForward,
+        const FRotator& ViewRotation,
         const UMotionTransferComponent* PlayerMotion) const;
     static bool IsBetterCandidate(
         const FCandidateEvaluation& Candidate,

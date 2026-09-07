@@ -87,13 +87,10 @@ receiver = blueprints["/Game/Transmit/Blueprints/BP_LinearReceiver"]
 receiver_cdo = unreal.get_default_object(receiver.generated_class())
 receiver_motion = receiver_cdo.get_editor_property("motion")
 require(receiver_motion.get_editor_property("can_receive_motion"), "Receiver must receive Motion")
-require(receiver_motion.get_editor_property("require_direction"), "Receiver must validate direction")
-required_direction = receiver_motion.get_editor_property("required_direction")
 require(
-    abs(required_direction.x - 1.0) < 0.001
-    and abs(required_direction.y) < 0.001
-    and abs(required_direction.z) < 0.001,
-    "Receiver direction requirement drift",
+    receiver_motion.get_editor_property("required_canonical_direction")
+    == unreal.MotionCanonicalDirection.FORWARD,
+    "Receiver canonical direction requirement drift",
 )
 require(
     receiver_motion.get_editor_property("endpoint_mode")

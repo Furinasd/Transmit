@@ -8,14 +8,13 @@
 
 | 项目 | 当前状态 |
 | --- | --- |
-| 引擎 | Unreal Engine 5.8（最近一次本地检查为 5.8.1） |
-| 当前阶段 | EXP-001：最小转移闭环（工程验证完成） |
-| 当前实现 | C++ Motion 核心（FMotionState / UMotionTransferComponent / IMotionTransferable / Room Reset）+ Transmit Blueprints + `L_TestChamber` |
-| 核心目标 | 验证最小 `Source → Player → Receiver` 运动转移闭环 |
+| 当前本地工具链 | Unreal Engine 5.8（最近一次本地检查为 5.8.1；EngineAssociation 属于工作站本地差异，不是项目版本号） |
+| 当前阶段 | `L_Transmit` 完整候选已整合、打包，等待 Ely 体验裁决 |
+| 当前实现 | Learn → Route → Weaponize 连续主图、分步目标、局部重试、CameraCanonical / PreserveSource 与两次撞门 |
+| 核心目标 | 可直接试玩、录制的完整候选；Ely 验收整体体验 |
 | 版本管理 | Git + Git LFS |
 
-> [!IMPORTANT]
-> **EXP-001 Engineering Validated**：`Source → Player → Receiver` 的 Capture / Carry / Transfer / Consume / Room Reset 闭环已在 PIE 验证（含 20/20 Reset）。human readability 与作品集级玩法验收仍未完成；v0.3 direction semantics 待 contract promotion，本 PR 不实现。
+当前制作线为 `Jason/L_Transmit_v01`。正式地图、共享 gameplay 与发布配置由主集成线维护；独立表现代码/资产从 `Jason/visual-presentation` 的 ready 批次集成。具体 SHA、验证边界与剩余工作见 [`Docs/STATE.md`](Docs/STATE.md)。早期 `feat/gameplay-core-v03` 是历史能力实现线。
 
 ## 核心玩法
 
@@ -26,7 +25,7 @@
    ↓
 携带 Carry：玩家临时持有唯一一份 Motion State
    ↓
-转移 Transfer：将状态原样交给兼容的 Target
+转移 Transfer：将状态按 gameplay camera 解析出的 Canonical Direction 交给兼容 Target
    ↓
 转换 Convert：由明确的环境规则改变方向或运动类型
    ↓
@@ -36,7 +35,7 @@
 核心设计约束：
 
 - **唯一所有权**：一份 Motion State 同一时间只属于 Source、Player 或 Target 中的一方。
-- **方向保留**：玩家瞄准只负责选中目标，不能凭空改写运动方向。
+- **方向语义**：Capture / Carry 保留 Source Motion；普通 Linear Transfer 由 CameraCanonical 确定性量化到六个 Canonical Direction；Boss High Motion 是显式例外，保留 Charger Dash 世界方向（bypass camera reroute）。Preview 与 Commit 始终共用同一方向结果。
 - **战斗与谜题共用语言**：敌人、机关和环境都遵循同一套运动状态规则。
 - **可读、可恢复**：合法目标、拒绝原因和状态归属必须可感知；关键资源可通过房间重置恢复。
 
@@ -45,7 +44,7 @@
 ```text
 Transmit/
 ├─ Config/                 # 项目默认配置、输入与启动地图
-├─ Source/passely/         # EXP-001 Motion 核心 C++：状态、事务、接口、Reset、自动化测试
+├─ Source/passely/         # Motion 核心 C++：状态、事务、接口、Reset、方向策略、Carrier 与自动化测试
 ├─ Content/
 │  ├─ ThirdPerson/         # 当前角色、GameMode 与入口关卡
 │  ├─ Transmit/            # EXP-001 输入、蓝图与 L_TestChamber
@@ -83,14 +82,14 @@ Blueprint：材质、VFX、音频、动画、UI 与关卡反馈
 
 C++ 负责状态不变量、事务、兼容性判断、重置契约和可测试的确定性规则；Blueprint 负责输入绑定、目标反馈、表现层以及关卡教学节奏。详细边界见 [`Docs/ARCHITECTURE.md`](Docs/ARCHITECTURE.md)。
 
-## 当前可玩闭环（EXP-001）
+## 当前已实现最小闭环（EXP-001 baseline）
 
 `L_TestChamber` 已装配一条最小闭环：
 
 ```text
 Source_Linear_001（持有 +X / 600 的 Linear Motion）
         ↓ 按 E 捕获（Capture）
-Player（携带唯一 Motion State，指示灯 + 方向箭头反馈）
+Player（携带唯一 Motion State，指示灯 + 地面方向 Preview）
         ↓ 按 Q 转移（Transfer）
 Receiver_Linear_001（校验方向后消费 Consume）
         ↓ 按 R 房间重置（Reset）
@@ -103,7 +102,21 @@ Source 恢复快照，Player / Receiver 清空
 - Transfer `Player → Receiver.Linear.001` 成功并消费，Player 清空。
 - 拒绝路径：`SourceEmpty` / `CarrierOccupied` / `InvalidSource` 均按契约返回且不丢失状态。
 - 房间 Reset：20/20 连续循环通过，`participants=3, success=true`，无重复/丢失 Motion State。
-- 入口：`/Game/Transmit/Maps/L_TestChamber`（编辑器启动图仍为模板 `Lvl_ThirdPerson`）。
+- 入口：`/Game/Transmit/Maps/L_TestChamber`（历史测试入口；当前启动图为 `L_Transmit`）。
+
+## 连续主关卡
+
+```text
+Learn: Source → Capture → Bridge → Cross
+Route: Send → Chase → Re-capture → Re-route → Dock / Arm
+Weaponize: Charger Dash → Capture High Motion → Ram → Fracture → Break → Exit
+```
+
+- 正式体验位于单张 `/Game/Transmit/Maps/L_Transmit`，`L_TestChamber` 保持回归用途。
+- 普通 Linear 按 gameplay camera 解析为世界六向；High Motion 通过 `PreserveSource` 保留 Charger 已提交的 Dash 方向。Preview 与 Commit 使用同一结果。
+- Directional Carrier 的 Actor 本体沿世界方向移动，用 swept collision 停止，并可被 re-capture。
+- `E` 捕获，`Q` 转移；`Backspace` 重试当前区域并保留已完成进度，`R` 从开场重新开始。WASD 移动，鼠标瞄准，空格跳跃。
+- 第一击让门受损，第二击解除威胁并开启出口；走入终点后显示完成状态。
 
 ## 运行项目
 
@@ -124,38 +137,28 @@ git lfs pull
 随后使用 Unreal Engine 5.8 打开 `passely.uproject`。当前编辑器与游戏入口地图为：
 
 ```text
-/Game/ThirdPerson/Lvl_ThirdPerson
+/Game/Transmit/Maps/L_Transmit
 ```
 
-`.uproject` 当前使用 GUID 关联本机引擎；在其他工作站首次打开时，可能需要重新选择 Unreal Engine 5.8。
+`.uproject` 当前使用 `5.8` 版本关联而不是某台工作站的引擎 GUID；其他工作站仍需安装或选择兼容的 Unreal Engine 5.8。
 
-## 验证状态
+## 验证与打包
 
-| 检查项 | 结果 | 证据边界 |
-| --- | --- | --- |
-| UE 5.8.1 编辑器启动 | 已观察通过 | 本地日志记录成功初始化 |
-| 当前地图检查 | 0 error / 0 warning | 本地编辑器日志 |
-| Blueprint 批量编译 | 0 error / 0 warning / 0 load failure | 编译本身完成；进程因本机 DDC/Zen 无可写节点返回 1 |
-| EXP-001 可玩闭环（PIE） | 已通过 | Capture / Transfer / Consume 成功，E/Q/R 可用 |
-| 20/20 Room Reset | 已通过 | PIE 自动化 R 键 + 状态校验（`Saved/Logs/passely.log`，2026-08-30） |
-| human readability / 首次玩家理解 | 未验证 | 尚未执行首次玩家盲测（Sep 1 门禁） |
-| Build / Packaging / 跨平台 | 未验证 | 尚未执行干净构建与打包门禁 |
+当前源版本与历史运行证据见 [`Docs/STATE.md`](Docs/STATE.md)。2026-09-07 的 gameplay 检查点记录 27/27 自动化和连续 PIE 通关；这些记录不证明 Windows 封包或真人首玩验收。
 
-## 开发路线
+封包命令、产物目录与平台验收见 [`Docs/PACKAGING.md`](Docs/PACKAGING.md)：
 
-1. **EXP-001：最小直接转移闭环（已完成工程验证）**  
-   Linear Source、玩家携带、Receiver 消费与房间 Reset 已在 PIE 验证；进入可读性与首次玩家理解阶段。
-2. **L1：证明玩法可读性与重复意愿**  
-   验证首次玩家能在 60–90 秒内完成闭环，并理解“移动的是运动，而不是物体”。
-3. **L2：验证方向推理**  
-   仅在 L1 通过后加入确定性的 Redirect/Relay，不扩展第二套交互语法。
-4. **L3：验证威胁反转**  
-   将 Charger 的冲刺同时作为威胁和高强度运动来源，验证战斗与解谜能否共用同一系统。
+```bash
+bash Scripts/package_ltransmit_mac.sh
+```
 
-## Next
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/package_ltransmit_windows.ps1 -EngineDir "C:\Program Files\Epic Games\UE_5.8"
+```
 
-- **Gameplay Coverage**：首次玩家理解测试、更多 L1 覆盖（瞄准/遮挡/不兼容/拒绝路径、人工 20/20 Reset）。
-- **v0.3 Design Promotion**：将 v0.3 direction semantics 先推进到契约层（`DESIGN_CONTRACT.md` / `ARCHITECTURE.md`），本 PR 不实现 v0.3。
+Windows 脚本必须在 Windows 上执行；当前尚无本轮 Win64 EXE 构建／运行通过证据。未完成设计与普通 Motion 入 Boss 房问题见 [`提交版差额`](Docs/submission/KNOWN_GAPS.md)。
+
+Ely 的首次完整试玩仍需确认：目标理解、Route 中继读图、Charge 捕获窗口、两次撞门差异、局部恢复、相机、节奏与视听平衡。5–7 分钟只是体验假设。
 
 ## 项目文档
 
@@ -169,7 +172,8 @@ git lfs pull
 
 ## 当前最重要的验收门
 
-在扩展敌人、关卡数量、Motion 类型或美术表现前，先用一个可玩的 EXP-001 回答两个问题：
+在扩展敌人、关卡数量、Motion 类型或美术表现前，先回答：
 
-1. 玩家是否能在没有文字讲解的情况下看懂 Motion State 当前属于谁？
-2. “夺取并转移运动”这一动作本身是否足够清晰、可预测并值得重复？
+1. Zone 1 玩家能否在没有文字讲解的情况下看懂 Motion State 当前属于谁？
+2. Zone 2 的“发送 → 追赶 → Re-capture → 再布线”是否清晰、可预测并值得重复？
+3. Zone 3 的 Boss Dash 截获 → direction-locked High Motion → Ram → Gate Break 是否成立同一个系统语言？

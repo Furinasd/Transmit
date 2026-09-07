@@ -62,8 +62,25 @@ public:
     UFUNCTION(BlueprintPure, Category = "Motion")
     EMotionEndpointMode GetEndpointMode() const;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion|Identity")
+    FName ParticipantId = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion|Rules")
+    bool bCanProvideMotion = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion|Rules")
+    bool bCanReceiveMotion = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion|Rules")
+    EMotionEndpointMode EndpointMode = EMotionEndpointMode::Store;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Motion|Rules")
+    EMotionCanonicalDirection RequiredCanonicalDirection = EMotionCanonicalDirection::None;
+
     FMotionCompatibilityResult CanProvideMotion() const;
-    FMotionCompatibilityResult CanReceiveState(const FMotionState& State) const;
+    FMotionCompatibilityResult CanReceiveState(
+        const FMotionState& State,
+        const FMotionDirectionResolution* Resolution = nullptr) const;
 
     FMotionTransferResult TryCaptureFromActor(
         AActor* SourceActor,
@@ -75,6 +92,11 @@ public:
 
     FMotionTransferResult TryCaptureFromComponent(UMotionTransferComponent* SourceComponent);
     FMotionTransferResult TryTransferToComponent(UMotionTransferComponent* TargetComponent);
+    FMotionTransferResult TryTransferToComponent(
+        UMotionTransferComponent* TargetComponent,
+        const FMotionDirectionResolution& Resolution);
+    UFUNCTION(BlueprintCallable, Category = "Motion")
+    bool GrantMotionState(const FMotionState& State);
     FMotionTransferResult NotifyRejectedRequest(
         EMotionTransferVerb Verb,
         EMotionTransferRejection Rejection);
@@ -108,32 +130,11 @@ private:
         FMotionTransferResult Result;
     };
 
-    UPROPERTY(EditAnywhere, Category = "Motion|Identity")
-    FName ParticipantId = NAME_None;
-
     UPROPERTY(EditAnywhere, Category = "Motion|Initial State")
     bool bStartsWithMotion = false;
 
     UPROPERTY(EditAnywhere, Category = "Motion|Initial State", meta = (EditCondition = "bStartsWithMotion"))
     FMotionState InitialMotion;
-
-    UPROPERTY(EditAnywhere, Category = "Motion|Rules")
-    bool bCanProvideMotion = false;
-
-    UPROPERTY(EditAnywhere, Category = "Motion|Rules")
-    bool bCanReceiveMotion = true;
-
-    UPROPERTY(EditAnywhere, Category = "Motion|Rules")
-    EMotionEndpointMode EndpointMode = EMotionEndpointMode::Store;
-
-    UPROPERTY(EditAnywhere, Category = "Motion|Rules")
-    bool bRequireDirection = false;
-
-    UPROPERTY(EditAnywhere, Category = "Motion|Rules", meta = (EditCondition = "bRequireDirection"))
-    FVector RequiredDirection = FVector::ForwardVector;
-
-    UPROPERTY(EditAnywhere, Category = "Motion|Rules", meta = (EditCondition = "bRequireDirection", ClampMin = "-1.0", ClampMax = "1.0"))
-    float MinimumDirectionDot = 0.95f;
 
     UPROPERTY(EditAnywhere, Category = "Motion|Rules")
     FGameplayTagQuery AcceptedMagnitudeTiers;
@@ -166,7 +167,9 @@ private:
         UMotionTransferComponent* SourceComponent,
         UMotionTransferComponent* TargetComponent,
         EMotionTransferVerb Verb,
-        bool bRequireProviderFlag);
+        bool bRequireProviderFlag,
+        const FMotionState* StateOverride = nullptr,
+        const FMotionDirectionResolution* Resolution = nullptr);
 
     FMotionTransferResult MakeRejectedResult(
         EMotionTransferVerb Verb,

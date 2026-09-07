@@ -8,6 +8,8 @@
 #include "InputMappingContext.h"
 #include "Motion/MotionInteractorComponent.h"
 #include "Motion/MotionRoomResetController.h"
+#include "Transmit/TransmitLevelActors.h"
+#include "InputCoreTypes.h"
 
 ATransmitPlayerController::ATransmitPlayerController()
 {
@@ -44,6 +46,8 @@ void ATransmitPlayerController::SetupInputComponent()
     {
         return;
     }
+
+    InputComponent->BindKey(EKeys::BackSpace, IE_Pressed, this, &ATransmitPlayerController::HandleRetry);
 
     if (CaptureAction)
     {
@@ -95,9 +99,15 @@ void ATransmitPlayerController::HandleTransfer()
 
 void ATransmitPlayerController::HandleReset()
 {
-    for (TActorIterator<AMotionRoomResetController> ResetIt(GetWorld()); ResetIt; ++ResetIt)
+    TActorIterator<AMotionRoomResetController> ResetIt(GetWorld());
+    if (ResetIt)
     {
         ResetIt->RequestRoomReset();
-        break;
     }
+}
+
+void ATransmitPlayerController::HandleRetry()
+{
+    TActorIterator<ATransmitLevelDirector> Director(GetWorld());
+    if (Director) Director->RequestLocalRetry();
 }

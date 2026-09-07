@@ -36,4 +36,5 @@ private:
     void HandleCapture();
     void HandleTransfer();
     void HandleReset();
+    void HandleRetry();
 };

@@ -1,0 +1,553 @@
+{
+  "date": "2026-09-06",
+  "baseline": "4db656bbacc15bbabfedebffc9485e22be26853f",
+  "candidate_content_commit": "e3e01f2",
+  "final_delta": "test fixture initialization and legal route harness stance; runtime and binary assets unchanged from candidate content commit",
+  "platform": "macOS arm64 UE 5.8 Editor",
+  "build": {
+    "result": "Succeeded",
+    "seconds": 8.75
+  },
+  "tests": [
+    {
+      "result": "Success",
+      "name": "ActorPathDirectionConsistency"
+    },
+    {
+      "result": "Success",
+      "name": "CanonicalResolver"
+    },
+    {
+      "result": "Success",
+      "name": "ChargerActorCaptureGate"
+    },
+    {
+      "result": "Success",
+      "name": "ChargerActorStructure"
+    },
+    {
+      "result": "Success",
+      "name": "ChargerStateMachine"
+    },
+    {
+      "result": "Success",
+      "name": "DirectionalCarrierCollision"
+    },
+    {
+      "result": "Success",
+      "name": "DirectionalCarrierCore"
+    },
+    {
+      "result": "Success",
+      "name": "DirectionalCarrierReset"
+    },
+    {
+      "result": "Success",
+      "name": "DirectionPolicyOrdinaryCamera"
+    },
+    {
+      "result": "Success",
+      "name": "DirectionPolicyPreserveSource"
+    },
+    {
+      "result": "Success",
+      "name": "MagnitudePolicy"
+    },
+    {
+      "result": "Success",
+      "name": "NotificationReentrancy"
+    },
+    {
+      "result": "Success",
+      "name": "OwnershipCycles"
+    },
+    {
+      "result": "Success",
+      "name": "RejectionPreservesOwner"
+    },
+    {
+      "result": "Success",
+      "name": "ResolvedTransfer"
+    },
+    {
+      "result": "Success",
+      "name": "StickyScoring"
+    },
+    {
+      "result": "Success",
+      "name": "RamSignatureAndRejectionOwnership"
+    }
+  ],
+  "map_check": [
+    "[2026.09.06-04.28.41:494][  0]MapCheck: 地图检测完成：0个错误、0个警告、完成用时0.028毫秒。"
+  ],
+  "blueprints": [
+    "[2026.09.06-04.25.40:478][113]LogPython: TRANSMIT_BP BP_TransmitGameMode <BlueprintStatus.BS_UP_TO_DATE: 3>",
+    "[2026.09.06-04.25.40:499][113]LogPython: TRANSMIT_BP BP_TransmitPlayerController <BlueprintStatus.BS_UP_TO_DATE: 3>",
+    "[2026.09.06-04.25.40:521][113]LogPython: TRANSMIT_BP BP_LinearReceiver <BlueprintStatus.BS_UP_TO_DATE: 3>",
+    "[2026.09.06-04.25.40:547][113]LogPython: TRANSMIT_BP BP_TransmitCharacter <BlueprintStatus.BS_UP_TO_DATE: 3>",
+    "[2026.09.06-04.25.40:568][113]LogPython: TRANSMIT_BP BP_LinearSource <BlueprintStatus.BS_UP_TO_DATE: 3>"
+  ],
+  "final_state": [
+    "[2026.09.06-04.32.29:029][253]LogPython: TRANSMIT_FINAL_STATE {\"hits\": 2, \"armed\": true, \"gate_collision\": false, \"gate_z\": 1000.0}"
+  ],
+  "continuous_run": [
+    {
+      "event": "begin",
+      "game_seconds": 0.0,
+      "note": "continuous scripted movement, real targeting, no injected Motion; human acceptance separate"
+    },
+    {
+      "event": "step",
+      "game_seconds": 0.25,
+      "name": "reset",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 0.000000, y: 0.000000, z: 92.149996}>"
+    },
+    {
+      "event": "capture",
+      "game_seconds": 0.5,
+      "target": "Learn_Source",
+      "ok": true,
+      "result": "<Struct 'MotionTransferResult' (0x9a04a814b60) {succeeded: True, verb: Capture, rejection: None, state_snapshot: {type: Linear, direction: {x: 1.000000, y: 0.000000, z: 0.000000}, magnitude: 600.000000, source_id: \"Learn_Source\", direction_policy: CameraCanonical}, from_participant_id: \"Learn_Source\", to_participant_id: \"Player\", consumed: False}>",
+      "preview": "<Struct 'MotionInteractionPreview' (0x9a006029ec0) {target: \"/Script/passely.TransmitMotionEndpointActor'/Game/Transmit/Maps/UEDPIE_0_L_Transmit.L_Transmit:PersistentLevel.TransmitMotionEndpointActor_2'\", verb: Capture, eligible: True, rejection: None, raw_score: 0.941556, magnitude_tier: {}, canonical_direction: None, projected_world_direction: {x: 0.000000, y: 0.000000, z: 0.000000}, has_projected_direction: False}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 0.5,
+      "name": "capture learn",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 0.000000, y: 0.000000, z: 92.149996}>"
+    },
+    {
+      "event": "transfer",
+      "game_seconds": 0.75,
+      "target": "Learn_BridgeSlab",
+      "ok": true,
+      "result": "<Struct 'MotionTransferResult' (0x9a04a814e00) {succeeded: True, verb: Transfer, rejection: None, state_snapshot: {type: Linear, direction: {x: 1.000000, y: 0.000000, z: 0.000000}, magnitude: 600.000000, source_id: \"Learn_Source\", direction_policy: CameraCanonical}, from_participant_id: \"Player\", to_participant_id: \"Learn.Bridge\", consumed: False}>",
+      "preview": "<Struct 'MotionInteractionPreview' (0x9a00602b3c0) {target: \"/Script/passely.TransmitBridgeSlab'/Game/Transmit/Maps/UEDPIE_0_L_Transmit.L_Transmit:PersistentLevel.TransmitBridgeSlab_1'\", verb: Transfer, eligible: True, rejection: None, raw_score: 0.913434, magnitude_tier: {}, canonical_direction: Forward, projected_world_direction: {x: 1.000000, y: 0.000000, z: 0.000000}, has_projected_direction: True}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 0.75,
+      "name": "send bridge",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 0.000000, y: 0.000000, z: 92.149996}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 6.2,
+      "name": "bridge spans gap",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 0.000000, y: 0.000000, z: 92.149996}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 7.533,
+      "name": "walk (600, 0)",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 535.007050, y: 0.000000, z: 92.149996}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 8.9,
+      "name": "walk (1150, 0)",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 1090.014624, y: 0.000000, z: 92.149996}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 10.667,
+      "name": "walk (1950, 0)",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 1885.036623, y: 0.000000, z: 132.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 11.933,
+      "name": "walk (2440, 0)",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 2380.043249, y: 0.000000, z: 141.496316}>"
+    },
+    {
+      "event": "capture",
+      "game_seconds": 12.183,
+      "target": "Route_Source",
+      "ok": true,
+      "result": "<Struct 'MotionTransferResult' (0x9a04a8148c0) {succeeded: True, verb: Capture, rejection: None, state_snapshot: {type: Linear, direction: {x: 1.000000, y: 0.000000, z: 0.000000}, magnitude: 600.000000, source_id: \"Route_Source\", direction_policy: CameraCanonical}, from_participant_id: \"Route_Source\", to_participant_id: \"Player\", consumed: False}>",
+      "preview": "<Struct 'MotionInteractionPreview' (0x9a006026a80) {target: \"/Script/passely.TransmitMotionEndpointActor'/Game/Transmit/Maps/UEDPIE_0_L_Transmit.L_Transmit:PersistentLevel.TransmitMotionEndpointActor_3'\", verb: Capture, eligible: True, rejection: None, raw_score: 0.935607, magnitude_tier: {}, canonical_direction: None, projected_world_direction: {x: 0.000000, y: 0.000000, z: 0.000000}, has_projected_direction: False}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 12.183,
+      "name": "capture route",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 2380.043249, y: 0.000000, z: 110.870520}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 13.138,
+      "name": "walk (2750, 0)",
+      "player": "<Struct 'Vector' (0x4181433f0) {x: 2687.480424, y: 0.000000, z: 92.149999}>"
+    },
+    {
+      "event": "transfer",
+      "game_seconds": 13.388,
+      "target": "Route_Carrier",
+      "ok": true,
+      "result": "<Struct 'MotionTransferResult' (0x9a04a814800) {succeeded: True, verb: Transfer, rejection: None, state_snapshot: {type: Linear, direction: {x: 1.000000, y: 0.000000, z: 0.000000}, magnitude: 600.000000, source_id: \"Route_Source\", direction_policy: CameraCanonical}, from_participant_id: \"Player\", to_participant_id: \"Route.Carrier\", consumed: False}>",
+      "preview": "<Struct 'MotionInteractionPreview' (0x9a006023c40) {target: \"/Script/passely.TransmitDirectionalCarrierActor'/Game/Transmit/Maps/UEDPIE_0_L_Transmit.L_Transmit:PersistentLevel.TransmitDirectionalCarrierActor_1'\", verb: Transfer, eligible: True, rejection: None, raw_score: 0.935321, magnitude_tier: {}, canonical_direction: Forward, projected_world_direction: {x: 1.000000, y: 0.000000, z: 0.000000}, has_projected_direction: True}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 13.388,
+      "name": "send carrier",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 2687.480424, y: 0.000000, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 14.421,
+      "name": "walk (3100, 0)",
+      "player": "<Struct 'Vector' (0x41f1533f0) {x: 3042.484949, y: 0.000000, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 16.304,
+      "name": "walk (3100, -920)",
+      "player": "<Struct 'Vector' (0x41f1534e0) {x: 3096.458168, y: -863.345515, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 17.738,
+      "name": "walk (3750, -920)",
+      "player": "<Struct 'Vector' (0x4181434e0) {x: 3689.242212, y: -914.733006, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 19.888,
+      "name": "walk (4770, -920)",
+      "player": "<Struct 'Vector' (0x4181433f0) {x: 4714.264864, y: -919.728379, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 21.038,
+      "name": "walk (5150, -700)",
+      "player": "<Struct 'Vector' (0x4181434e0) {x: 5093.757162, y: -728.361605, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 21.288,
+      "name": "carrier catch",
+      "player": "<Struct 'Vector' (0x4181433f0) {x: 5093.757162, y: -728.361605, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 22.671,
+      "name": "walk (5100, -100)",
+      "player": "<Struct 'Vector' (0x41f1533f0) {x: 5099.370291, y: -163.382237, z: 92.149999}>"
+    },
+    {
+      "event": "capture",
+      "game_seconds": 22.921,
+      "target": "Route_Carrier",
+      "ok": true,
+      "result": "<Struct 'MotionTransferResult' (0x9a04a815dc0) {succeeded: True, verb: Capture, rejection: None, state_snapshot: {type: Linear, direction: {x: 1.000000, y: 0.000000, z: 0.000000}, magnitude: 600.000000, source_id: \"Route_Source\", direction_policy: CameraCanonical}, from_participant_id: \"Route.Carrier\", to_participant_id: \"Player\", consumed: False}>",
+      "preview": "<Struct 'MotionInteractionPreview' (0x9a00602a440) {target: \"/Script/passely.TransmitDirectionalCarrierActor'/Game/Transmit/Maps/UEDPIE_0_L_Transmit.L_Transmit:PersistentLevel.TransmitDirectionalCarrierActor_1'\", verb: Capture, eligible: True, rejection: None, raw_score: 0.948292, magnitude_tier: {}, canonical_direction: None, projected_world_direction: {x: 0.000000, y: 0.000000, z: 0.000000}, has_projected_direction: False}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 22.921,
+      "name": "recapture carrier",
+      "player": "<Struct 'Vector' (0x41f1534e0) {x: 5099.370291, y: -163.382237, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 23.371,
+      "name": "walk (5100, -260)",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 5099.582111, y: -195.882250, z: 92.149999}>"
+    },
+    {
+      "event": "transfer",
+      "game_seconds": 23.621,
+      "target": "Route_Carrier",
+      "ok": true,
+      "result": "<Struct 'MotionTransferResult' (0x9a04a8158e0) {succeeded: True, verb: Transfer, rejection: None, state_snapshot: {type: Linear, direction: {x: 0.866025, y: 0.500000, z: 0.000000}, magnitude: 600.000000, source_id: \"Route_Source\", direction_policy: CameraCanonical}, from_participant_id: \"Player\", to_participant_id: \"Route.Carrier\", consumed: False}>",
+      "preview": "<Struct 'MotionInteractionPreview' (0x9a0060234c0) {target: \"/Script/passely.TransmitDirectionalCarrierActor'/Game/Transmit/Maps/UEDPIE_0_L_Transmit.L_Transmit:PersistentLevel.TransmitDirectionalCarrierActor_1'\", verb: Transfer, eligible: True, rejection: None, raw_score: 0.945797, magnitude_tier: {}, canonical_direction: Forward, projected_world_direction: {x: 0.866025, y: 0.500000, z: 0.000000}, has_projected_direction: True}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 23.621,
+      "name": "reroute carrier",
+      "player": "<Struct 'Vector' (0x4181434e0) {x: 5099.582111, y: -195.882250, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 26.738,
+      "name": "ram armed",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 5099.582111, y: -195.882250, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 28.021,
+      "name": "walk (5200, -750)",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 5189.633259, y: -692.795100, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 29.469,
+      "name": "walk (5850, -650)",
+      "player": "<Struct 'Vector' (0x4181434e0) {x: 5794.287374, y: -653.610460, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 31.836,
+      "name": "walk (7000, -500)",
+      "player": "<Struct 'Vector' (0x4181433f0) {x: 6940.089859, y: -507.632685, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 34.186,
+      "name": "walk (7000, 700)",
+      "player": "<Struct 'Vector' (0x4181434e0) {x: 6996.823802, y: 635.976107, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 35.569,
+      "name": "walk (7620, 700)",
+      "player": "<Struct 'Vector' (0x41f1534e0) {x: 7558.871552, y: 693.719784, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 37.119,
+      "name": "walk (7620, 1420)",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 7614.645705, y: 1356.384467, z: 92.149999}>"
+    },
+    {
+      "event": "capture",
+      "game_seconds": 41.802,
+      "target": "Weaponize_Charger",
+      "ok": true,
+      "result": "<Struct 'MotionTransferResult' (0x9a04a8158e0) {succeeded: True, verb: Capture, rejection: None, state_snapshot: {type: Linear, direction: {x: 1.000000, y: 0.000000, z: 0.000000}, magnitude: 1200.000000, source_id: \"Charger.Dash.001\", direction_policy: PreserveSource}, from_participant_id: \"Weaponize.Charger\", to_participant_id: \"Player\", consumed: False}>",
+      "preview": "<Struct 'MotionInteractionPreview' (0x9a006027500) {target: \"/Script/passely.TransmitArenaCharger'/Game/Transmit/Maps/UEDPIE_0_L_Transmit.L_Transmit:PersistentLevel.TransmitArenaCharger_1'\", verb: Capture, eligible: True, rejection: None, raw_score: 0.844388, magnitude_tier: {}, canonical_direction: None, projected_world_direction: {x: 0.000000, y: 0.000000, z: 0.000000}, has_projected_direction: False}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 41.802,
+      "name": "capture dash one",
+      "player": "<Struct 'Vector' (0x4181433f0) {x: 7614.645705, y: 1356.384467, z: 92.149999}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 43.969,
+      "name": "walk (7680, 2450)",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 7680.578464, y: 2385.749053, z: 92.149995}>"
+    },
+    {
+      "event": "transfer",
+      "game_seconds": 44.219,
+      "target": "Weaponize_Ram",
+      "ok": true,
+      "result": "<Struct 'MotionTransferResult' (0x9a04a815dc0) {succeeded: True, verb: Transfer, rejection: None, state_snapshot: {type: Linear, direction: {x: 1.000000, y: 0.000000, z: 0.000000}, magnitude: 1200.000000, source_id: \"Charger.Dash.001\", direction_policy: PreserveSource}, from_participant_id: \"Player\", to_participant_id: \"Weaponize.Ram\", consumed: True}>",
+      "preview": "<Struct 'MotionInteractionPreview' (0x9a006029280) {target: \"/Script/passely.TransmitRam'/Game/Transmit/Maps/UEDPIE_0_L_Transmit.L_Transmit:PersistentLevel.TransmitRam_1'\", verb: Transfer, eligible: True, rejection: None, raw_score: 0.970926, magnitude_tier: {}, canonical_direction: None, projected_world_direction: {x: 1.000000, y: 0.000000, z: 0.000000}, has_projected_direction: True}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 44.219,
+      "name": "power ram one",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 7680.578464, y: 2385.749053, z: 92.149995}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 44.669,
+      "name": "gate hit one",
+      "player": "<Struct 'Vector' (0x4181433f0) {x: 7680.578464, y: 2385.749053, z: 92.149995}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 45.508,
+      "name": "walk (7620, 2080)",
+      "player": "<Struct 'Vector' (0x4181433f0) {x: 7631.791489, y: 2136.385296, z: 92.149995}>"
+    },
+    {
+      "event": "capture",
+      "game_seconds": 47.408,
+      "target": "Weaponize_Charger",
+      "ok": true,
+      "result": "<Struct 'MotionTransferResult' (0x9a04a816480) {succeeded: True, verb: Capture, rejection: None, state_snapshot: {type: Linear, direction: {x: 1.000000, y: 0.000000, z: 0.000000}, magnitude: 1200.000000, source_id: \"Charger.Dash.001\", direction_policy: PreserveSource}, from_participant_id: \"Weaponize.Charger\", to_participant_id: \"Player\", consumed: False}>",
+      "preview": "<Struct 'MotionInteractionPreview' (0x9a00602a280) {target: \"/Script/passely.TransmitArenaCharger'/Game/Transmit/Maps/UEDPIE_0_L_Transmit.L_Transmit:PersistentLevel.TransmitArenaCharger_1'\", verb: Capture, eligible: True, rejection: None, raw_score: 0.843417, magnitude_tier: {}, canonical_direction: None, projected_world_direction: {x: 0.000000, y: 0.000000, z: 0.000000}, has_projected_direction: False}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 47.408,
+      "name": "capture dash two",
+      "player": "<Struct 'Vector' (0x41f1535d0) {x: 7631.791489, y: 2136.385296, z: 92.149995}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 48.292,
+      "name": "walk (7680, 2450)",
+      "player": "<Struct 'Vector' (0x4181433f0) {x: 7681.077690, y: 2385.213336, z: 92.149991}>"
+    },
+    {
+      "event": "transfer",
+      "game_seconds": 48.542,
+      "target": "Weaponize_Ram",
+      "ok": true,
+      "result": "<Struct 'MotionTransferResult' (0x9a04a8140e0) {succeeded: True, verb: Transfer, rejection: None, state_snapshot: {type: Linear, direction: {x: 1.000000, y: 0.000000, z: 0.000000}, magnitude: 1200.000000, source_id: \"Charger.Dash.001\", direction_policy: PreserveSource}, from_participant_id: \"Player\", to_participant_id: \"Weaponize.Ram\", consumed: True}>",
+      "preview": "<Struct 'MotionInteractionPreview' (0x9a0060251c0) {target: \"/Script/passely.TransmitRam'/Game/Transmit/Maps/UEDPIE_0_L_Transmit.L_Transmit:PersistentLevel.TransmitRam_1'\", verb: Transfer, eligible: True, rejection: None, raw_score: 0.970836, magnitude_tier: {}, canonical_direction: None, projected_world_direction: {x: 1.000000, y: 0.000000, z: 0.000000}, has_projected_direction: True}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 48.542,
+      "name": "power ram two",
+      "player": "<Struct 'Vector' (0x4181434e0) {x: 7681.077690, y: 2385.213336, z: 92.149991}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 48.992,
+      "name": "gate hit two",
+      "player": "<Struct 'Vector' (0x41f1533f0) {x: 7681.077690, y: 2385.213336, z: 92.149991}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 49.908,
+      "name": "walk (7930, 2530)",
+      "player": "<Struct 'Vector' (0x4181434e0) {x: 7885.123575, y: 2486.542448, z: 92.150003}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 51.208,
+      "name": "walk (8460, 2530)",
+      "player": "<Struct 'Vector' (0x4181433f0) {x: 8398.664939, y: 2525.363401, z: 92.150003}>"
+    },
+    {
+      "event": "step",
+      "game_seconds": 52.358,
+      "name": "walk (8880, 2530)",
+      "player": "<Struct 'Vector' (0x4181434e0) {x: 8823.650323, y: 2529.457195, z: 92.150003}>"
+    },
+    {
+      "event": "complete",
+      "game_seconds": 52.375,
+      "ok": true,
+      "reason": "exit reached",
+      "player": "<Struct 'Vector' (0x41f1533f0) {x: 8823.650323, y: 2529.457195, z: 92.150003}>"
+    }
+  ],
+  "recovery": [
+    {
+      "event": "snapshot",
+      "phase": 0,
+      "checks": {
+        "player_at_start": true,
+        "player_empty": true,
+        "learn_source_restored": true,
+        "route_source_restored": true,
+        "bridge_restored": true,
+        "carrier_restored": true,
+        "ram_reset": true,
+        "gate_reset": true
+      }
+    },
+    {
+      "event": "throat",
+      "player_blocker": "Route_LowRoof_0",
+      "carrier_blocker": null
+    },
+    {
+      "event": "snapshot",
+      "phase": 1,
+      "checks": {
+        "player_at_start": true,
+        "player_empty": true,
+        "learn_source_restored": true,
+        "route_source_restored": true,
+        "bridge_restored": true,
+        "carrier_restored": true,
+        "ram_reset": true,
+        "gate_reset": true
+      }
+    },
+    {
+      "event": "snapshot",
+      "phase": 2,
+      "checks": {
+        "player_at_start": true,
+        "player_empty": true,
+        "learn_source_restored": true,
+        "route_source_restored": true,
+        "bridge_restored": true,
+        "carrier_restored": true,
+        "ram_reset": true,
+        "gate_reset": true
+      }
+    },
+    {
+      "event": "snapshot",
+      "phase": 3,
+      "checks": {
+        "player_at_start": true,
+        "player_empty": true,
+        "learn_source_restored": true,
+        "route_source_restored": true,
+        "bridge_restored": true,
+        "carrier_restored": true,
+        "ram_reset": true,
+        "gate_reset": true
+      }
+    },
+    {
+      "event": "snapshot",
+      "phase": 4,
+      "checks": {
+        "player_at_start": true,
+        "player_empty": true,
+        "learn_source_restored": true,
+        "route_source_restored": true,
+        "bridge_restored": true,
+        "carrier_restored": true,
+        "ram_reset": true,
+        "gate_reset": true
+      }
+    },
+    {
+      "event": "dash_hit_recovery",
+      "seconds": 4.0698219165205956
+    },
+    {
+      "event": "snapshot",
+      "phase": 5,
+      "checks": {
+        "player_at_start": true,
+        "player_empty": true,
+        "learn_source_restored": true,
+        "route_source_restored": true,
+        "bridge_restored": true,
+        "carrier_restored": true,
+        "ram_reset": true,
+        "gate_reset": true
+      }
+    },
+    {
+      "event": "dash_hit_recovery",
+      "seconds": 4.06926891580224
+    },
+    {
+      "event": "complete",
+      "ok": true,
+      "reason": "three falls and two dash collisions restored clean state"
+    }
+  ],
+  "source_evidence_files": [
+    "Saved/LTransmitEvidence/run-1788669133.json",
+    "Saved/LTransmitEvidence/recovery-1788669159.json"
+  ],
+  "limitations": [
+    "Scripted perfect-information traversal is not a blind playtest or validation of the 5–7 minute target.",
+    "Recovery probes intentionally teleport only the live pawn to induce failure.",
+    "macOS Editor only; no packaged or other-platform validation."
+  ],
+  "meaningful_failed_attempts": {
+    "fixture_failure": [
+      "[2026.09.06-04.25.42:131][197]LogAutomationController: Error: Expected 'Unarmed rejection retains Player ownership' to be true.",
+      "[2026.09.06-04.25.42:131][197]LogAutomationController: Error: Expected 'Axis rejection retains Player ownership' to be true.",
+      "[2026.09.06-04.25.42:131][197]LogAutomationController: Error: Expected 'Commit matches Preview' to be true.",
+      "[2026.09.06-04.25.42:131][197]LogAutomationController: Error: Expected 'Ram consumes the single motion resource' to be true."
+    ],
+    "foreground_waypoint_failure": [
+      "[2026.09.06-04.30.26:284][947]LogPython: TRANSMIT_RUN {\"event\": \"complete\", \"game_seconds\": 42.944, \"ok\": false, \"reason\": \"step failed: walk (4900, -290)\", \"player\": \"<Struct 'Vector' (0x41f1535d0) {x: 5035.057125, y: -289.986130, z: 92.150002}>\"}",
+      "[2026.09.06-04.31.20:982][181]LogPython: TRANSMIT_FINAL_BLOCKER_LABEL Route_SouthSill_3"
+    ]
+  }
+}
