@@ -101,7 +101,7 @@ void ATransmitPresentationRig::ReplaceLegacyPresentation(AActor* Actor)
     for(auto* Arrow:Arrows)
     {
         if(LegacyArrows.ContainsByPredicate([Arrow](const auto& A){return A.Arrow==Arrow;})) continue;
-        LegacyArrows.Add({Arrow,Arrow->bHiddenInGame});
+        LegacyArrows.Add({Arrow,Arrow->bHiddenInGame != 0});
         Arrow->SetHiddenInGame(true,true);
     }
 }
