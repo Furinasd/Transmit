@@ -4,7 +4,7 @@
 
 ## Windows / Win64
 
-需要 Windows 主机、UE 5.8、与该引擎匹配的 Visual Studio C++ 工具链及 Windows SDK、Git LFS。当前仓库无已注册的 GitHub Actions runner；Mac 构建不证明 Win64 可打包。
+需要 Windows 主机、UE 5.8、与该引擎匹配的 Visual Studio C++ 工具链及 Windows SDK、Git LFS。已有指定提交的 Win64 封包记录，见 [证据账本](EVIDENCE.md)；每个候选仍需按下面的步骤独立验收。
 
 在干净的目标提交上运行 Windows PowerShell：
 
@@ -35,4 +35,4 @@ bash Scripts/package_ltransmit_mac.sh
 - `Scripts/` 保存封包与编辑器工具；`Docs/dev/` 保存历史证据，`Docs/design/` 保存纸面方案，`Docs/submission/` 保存提交差额。保留设计推演，不以整理为由删除。
 - `Saved/`、`Binaries/`、`Intermediate/`、包和本地报告保持忽略，不加入 Git。候选目录保存日志和源版本供追溯。
 - MCP 和 AllToolsets 仅对 Editor 目标启用，游戏不依赖编辑器自动化插件。
-- 已知未完成项见 [提交版差额](submission/KNOWN_GAPS.md)。PR 保留 Draft，直到 Win64 封包及必要人工验收完成。
+- 已知未完成项见 [提交版差额](submission/KNOWN_GAPS.md)。PR #9 已合并；合并状态不代替候选验收。后续发布包应附真实源版本、完整运行清单及未验项。

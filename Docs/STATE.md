@@ -2,9 +2,16 @@
 
 > Operational snapshot, not design authority. Gameplay rules live in `DESIGN_CONTRACT.md`; architecture lives in `ARCHITECTURE.md`. Historical evidence remains in `Docs/dev/` and Git.
 
-Last inspected: 2026-09-07, weak guidance / target-locked counterstroke refinement. Human first-play feel and foreground packaged profiling remain open.
+Latest documentation review: 2026-09-13. The gameplay checkpoints below retain their original dates. Current portfolio evidence is indexed in [EVIDENCE.md](EVIDENCE.md), including the later Win64 package and author-confirmed Windows packaged demonstration. No new UE run was performed for this documentation update.
 
-## Delivery checkpoint — 2026-09-07
+## Delivery evidence update — 2026-09-13
+
+- PR #9 is merged. The source baseline reviewed for this documentation pass is main `9455e05`; its parent `dbd1ab8` produced the local `20260907-134820-Win64` Development candidate.
+- Existing `package.log` records BuildCookRun exit 0; the D3D12 offscreen standalone log enters L_Transmit and exits 0. It still contains a handled GameFeatureData startup ensure. Full manual acceptance and foreground profiling remain open.
+- The author confirms the portfolio video was recorded from the final submitted Windows packaged build. Its exact SHA/candidate ID is not yet linked; do not assume it is the local candidate above.
+- The September 7 handoff below predates that Windows execution. Its unexecuted-script and pre-merge statements describe history, not current delivery status. Mac stopped attempts and successful historical candidates remain separate records.
+
+## Historical delivery checkpoint — 2026-09-07
 
 - Packaging / PR preparation continues on `Jason/L_Transmit_v01`, targeting `main`.
 - Windows packaging entry: `Scripts/package_ltransmit_windows.ps1`; instructions: `Docs/PACKAGING.md`. Ely will pull this branch on the Windows machine and perform final packaging/testing; no repository Actions runner is registered. Win64 build/cook/runtime remain unverified.

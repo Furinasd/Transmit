@@ -4,6 +4,8 @@
 
 ## Scope
 
+Reading note (2026-09-13): the opening production-branch status and "not yet implemented" annotations in early target diagrams are historical. Later sections record the implemented Carrier, source direction policy and receiver-side counterstroke. The reviewed main baseline is `9455e05`; use [CASE_STUDIES.md](CASE_STUDIES.md) for a concise current explanation and [EVIDENCE.md](EVIDENCE.md) for versioned validation. This documentation pass does not change the architecture.
+
 This document records technical ownership, interfaces, data flow, and the Blueprint/C++ boundary. Whether a rule is fun, balanced, or promoted for a level belongs in `DESIGN_CONTRACT.md`.
 
 Read project context in this order:

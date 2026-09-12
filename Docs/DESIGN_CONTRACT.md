@@ -4,6 +4,8 @@
 
 ## Authority
 
+Reading note (2026-09-13): capability tables dated 2026-09-05 preserve the original promotion snapshot. The authorized amendments at the end of this document record later implementation and the 2026-09-07 Boss / experience refinements. Read those amendments before interpreting an early "not implemented" or fixed-axis statement as current. This note changes no gameplay rule; current evidence is indexed in [EVIDENCE.md](EVIDENCE.md).
+
 Only rules explicitly promoted into this document are authorized for implementation. Notion remains the source for design intent, hypotheses, evidence, alternatives, and rejected ideas. An experiment, illustrative parameter, or paper-level possibility is not an implementation requirement unless promoted here.
 
 When this contract lists an open decision, preserve the seam and avoid choosing a permanent behavior without evidence.
